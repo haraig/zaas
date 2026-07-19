@@ -1,0 +1,167 @@
+---
+import ToolLayout from "../../layouts/ToolLayout.astro";
+import GenerateButton from "../../components/GenerateButton.astro";
+import ApiCallPanel from "../../components/ApiCallPanel.astro";
+import RateLimitNotice from "../../components/RateLimitNotice.astro";
+
+// The JS is imported inside the <script> block below.
+import "leaflet/dist/leaflet.css";
+---
+
+<ToolLayout
+  title="Random Coordinates"
+  heading="Random Coordinates"
+  description="Generate random geographic coordinates, optionally restricted to land areas."
+>
+  <!-- Controls -->
+  <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-center mb-8">
+    <div class="flex items-center gap-2 pt-6">
+      <input
+        type="checkbox"
+        id="coordinates-land-only"
+        class="rounded border border-border dark:border-border-dark accent-accent w-4 h-4"
+      />
+      <label for="coordinates-land-only" class="text-sm font-medium">Land only</label>
+    </div>
+    <div>
+      <label for="coordinates-count" class="block text-sm font-medium mb-1">Count</label>
+      <input
+        type="number"
+        id="coordinates-count"
+        min="1"
+        max="100"
+        value="1"
+        class="w-24 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <GenerateButton label="Generate" loadingLabel="Generating..." />
+  </div>
+
+  <!-- Result -->
+  <div
+    id="coordinates-result-container"
+    class="hidden rounded-lg border border-border dark:border-border-dark bg-surface-alt dark:bg-surface-alt-dark p-6"
+  >
+    <!-- Leaflet map -->
+    <div
+      id="coordinates-map"
+      class="hidden mb-4 rounded-lg overflow-hidden border border-border dark:border-border-dark"
+      style="height: 280px;"
+    ></div>
+    <!-- Coordinate rows -->
+    <div id="coordinates-result" class="flex flex-col gap-2"></div>
+  </div>
+
+  <!-- Error -->
+  <div
+    id="coordinates-error"
+    role="alert" class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
+  >
+  </div>
+
+  <!-- Rate Limit Notice -->
+  <RateLimitNotice />
+
+  <!-- API Call Panel -->
+  <ApiCallPanel />
+</ToolLayout>
+
+<script>
+  // Leaflet is bundled from the npm package - no CDN loading needed.
+  import L from "leaflet";
+  import type { Map as LeafletMap } from "leaflet";
+  import { initToolRunner } from "../../scripts/toolRunner";
+  import { createInlineCopyButton } from "../../scripts/copyButton";
+
+  const landOnlyCheckbox = document.getElementById("coordinates-land-only") as HTMLInputElement;
+  const countInput = document.getElementById("coordinates-count") as HTMLInputElement;
+  const mapEl = document.getElementById("coordinates-map")!;
+  const resultEl = document.getElementById("coordinates-result")!;
+
+  let leafletMap: LeafletMap | null = null;
+
+  function renderMap(coords: { lat: number; lon: number }[]) {
+    // Destroy previous map instance to allow re-initialising on the same div.
+    if (leafletMap) {
+      leafletMap.remove();
+      leafletMap = null;
+      mapEl.innerHTML = "";
+    }
+
+    mapEl.classList.remove("hidden");
+    leafletMap = L.map("coordinates-map");
+
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(leafletMap);
+
+    coords.forEach((c) => {
+      L.marker([c.lat, c.lon])
+        .addTo(leafletMap!)
+        .bindPopup(`${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}`);
+    });
+
+    if (coords.length === 1) {
+      leafletMap.setView([coords[0].lat, coords[0].lon], 6);
+    } else {
+      const lats = coords.map((c) => c.lat);
+      const lons = coords.map((c) => c.lon);
+      leafletMap.fitBounds(
+        [
+          [Math.min(...lats), Math.min(...lons)],
+          [Math.max(...lats), Math.max(...lons)],
+        ],
+        { padding: [30, 30] },
+      );
+    }
+  }
+
+  initToolRunner({
+    resultContainerId: "coordinates-result-container",
+    errorElId: "coordinates-error",
+    buildPath() {
+      const landOnly = landOnlyCheckbox.checked;
+      const count = Math.max(1, Math.min(100, parseInt(countInput.value, 10) || 1));
+      countInput.value = String(count);
+
+      const params = new URLSearchParams();
+      if (landOnly) params.set("land_only", "true");
+      if (count > 1) params.set("count", String(count));
+
+      return `/api/v1/coordinates${params.toString() ? "?" + params.toString() : ""}`;
+    },
+    renderResults(json) {
+      const data = json as {
+        result?: { lat: number; lon: number };
+        results?: { lat: number; lon: number }[];
+      };
+      const count = parseInt(countInput.value, 10) || 1;
+      const coords: { lat: number; lon: number }[] =
+        count === 1 ? [data.result!] : (data.results ?? []);
+
+      // Render the map (Leaflet is already bundled - no async loading needed).
+      try {
+        renderMap(coords);
+      } catch {
+        mapEl.classList.add("hidden");
+      }
+
+      // Render one row per coordinate with a copy button.
+      resultEl.innerHTML = "";
+      coords.forEach((c) => {
+        const text = `${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}`;
+        const row = document.createElement("div");
+        row.className = "flex items-center gap-3";
+
+        const span = document.createElement("span");
+        span.className = "font-mono text-sm flex-1";
+        span.textContent = text;
+        row.appendChild(span);
+
+        row.appendChild(createInlineCopyButton(text));
+        resultEl.appendChild(row);
+      });
+    },
+  });
+</script>

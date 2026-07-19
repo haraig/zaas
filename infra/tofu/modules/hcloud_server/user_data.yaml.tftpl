@@ -1,0 +1,63 @@
+#cloud-config
+users:
+  - name: ${user_name}
+    groups: users, admin, docker
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+%{ for key in ssh_authorized_keys }
+      - ${key}
+%{ endfor }
+
+package_update: true
+package_upgrade: true
+
+# Base security packages (Docker prerequisites are already in Ubuntu 26.04)
+packages:
+  - fail2ban
+  - ufw
+  - unattended-upgrades
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/ssh-hardening.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      Port ${ssh_port}
+      KbdInteractiveAuthentication no
+      ChallengeResponseAuthentication no
+      MaxAuthTries 2
+      AllowTcpForwarding no
+      X11Forwarding no
+      AllowAgentForwarding no
+      AuthorizedKeysFile .ssh/authorized_keys
+      AllowUsers ${user_name}
+
+runcmd:
+  # 1. Configure and start Fail2Ban
+  - printf "[sshd]\nenabled = true\nport = ssh, ${ssh_port}\nbanaction = iptables-multiport" > /etc/fail2ban/jail.local
+  - systemctl enable --now fail2ban
+
+  # 2. Configure Firewall (UFW)
+  - ufw limit ${ssh_port}
+  - ufw allow 80
+  - ufw allow 443
+  - ufw --force enable
+
+  # 3. Enable Unattended Upgrades
+  - systemctl enable --now unattended-upgrades
+
+  # 4. Install Docker CE Official Repository & Packages
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update -y
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable --now docker
+
+# 5. Gracefully reboot the server only after everything above finishes completely
+power_state:
+  delay: "now"
+  mode: "reboot"
+  message: "Cloud-init complete. Rebooting server."

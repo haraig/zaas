@@ -1,0 +1,107 @@
+# OTel Collector pipeline configuration.
+# Receives OTLP from the Go API and tails Docker container JSON logs.
+# Exports to Tempo (traces), Prometheus remote-write (metrics), and Loki (logs).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Tail Docker container JSON log files.
+  # Each container logs to /var/lib/docker/containers/<id>/<id>-json.log.
+  filelog/docker:
+    include:
+      - /var/lib/docker/containers/*/*-json.log
+    start_at: end
+    include_file_path: true
+    include_file_name: false
+    operators:
+      # Parse the Docker JSON envelope: {"log":"...","stream":"stdout","time":"..."}
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.time
+          layout: "%Y-%m-%dT%H:%M:%S.%fZ"
+        on_error: send
+      # Move the actual log line to body.
+      - type: move
+        from: attributes.log
+        to: body
+        on_error: send
+      # Promote stream (stdout/stderr) to a resource attribute for Loki labeling.
+      - type: move
+        from: attributes.stream
+        to: resource["log.iostream"]
+        on_error: send
+
+processors:
+  # memory_limiter must be the FIRST processor in every pipeline.
+  # It protects the Collector from OOM-killing under sudden trace or log bursts.
+  # check_interval: how often to check memory usage.
+  # limit_percentage: refuse new data when heap exceeds this % of total memory.
+  # spike_limit_percentage: headroom reserved for sudden spikes above limit_percentage.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+
+  # resourcedetection enriches spans, metrics, and logs with host/container attributes
+  # (e.g. host.name, os.type) detected from the environment where the Collector runs.
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 5s
+    override: false
+
+  # attributes/pii drops or hashes fields that may contain personally identifiable
+  # information before data reaches Tempo, Prometheus, or Loki.
+  # zaas.client_name is user-supplied display name; *.email covers any future attribute
+  # containing an email address. zaas.client_id (UUID) is safe to keep for trace search.
+  attributes/pii:
+    actions:
+      - key: zaas.client_name
+        action: delete
+      - key: user.email
+        action: delete
+      - key: enduser.email
+        action: delete
+      - pattern: ".*\\.email$"
+        action: delete
+
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  prometheusremotewrite:
+    endpoint: "http://prometheus:9090/api/v1/write"
+    tls:
+      insecure_skip_verify: true
+
+  otlphttp/loki:
+    endpoint: "http://loki:3100/otlp"
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, attributes/pii, batch]
+      exporters: [otlp/tempo]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [prometheusremotewrite]
+
+    logs:
+      receivers: [otlp, filelog/docker]
+      processors: [memory_limiter, resourcedetection, attributes/pii, batch]
+      exporters: [otlphttp/loki]

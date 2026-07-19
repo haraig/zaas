@@ -1,0 +1,91 @@
+# Production Caddyfile.
+# Domain is read from the ZAAS_DOMAIN environment variable (default: zaas.at).
+# Automatic HTTPS via Let's Encrypt (requires ports 80/443 reachable).
+# The Go API container is named "api" in Docker Compose (port 8080).
+# Static web files are served from /srv/web (built Astro output).
+
+{
+    # Enable Prometheus metrics on the admin API (caddy:2019/metrics).
+    metrics
+}
+
+{$ZAAS_DOMAIN:zaas.at} {
+
+    # Distributed tracing: creates a root span and propagates traceparent to upstream.
+    tracing {
+        span caddy-ingress
+    }
+
+    # Security headers
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # Prevent the verification token (and any other query params) from leaking
+        # via the Referer header when the user follows a link to a third-party resource.
+        Referrer-Policy "no-referrer"
+        # Disable browser features that are not used by this application.
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        # CSP: Scalar and Leaflet are self-hosted (no CDN exception needed).
+        # 'unsafe-inline' is kept for script-src because Astro's static build
+        # inlines small component scripts as <script type="module"> elements.
+        # Removing it requires a hash-generation post-build step; see
+        # docs/reference/gotchas.md for details and a migration path.
+        # 'unsafe-inline' for style-src covers Scalar's runtime-injected styles.
+        # object-src, base-uri, frame-ancestors, and form-action close common
+        # injection vectors that CSP is otherwise blind to.
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: tile.openstreetmap.org; connect-src 'self' {$ZAAS_DOMAIN:zaas.at}; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        -Server
+    }
+
+    # Reject oversized request bodies before they reach application containers.
+    # 1 MB is sufficient for all ZaaS API payloads; large bodies indicate abuse.
+    request_body {
+        max_size 1MB
+    }
+
+    # API and internal probe routes -> Go API container
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+    handle /healthz {
+        reverse_proxy api:8080
+    }
+    handle /readyz {
+        reverse_proxy api:8080
+    }
+    handle_path /deploy-hook/* {
+        reverse_proxy webhook:9000
+    }
+
+    # Everything else -> pre-built Astro static site
+    handle {
+        root * /srv/web
+        file_server
+        try_files {path} /index.html
+    }
+}
+
+# Grafana UI - accessible at https://grafana.{$ZAAS_DOMAIN:zaas.at}.
+# Requires a DNS A record for grafana.zaas.at pointing to this server.
+# TLS certificate provisioned automatically by Caddy via Let's Encrypt.
+# No CSP header - Grafana manages its own asset loading.
+# Authentication is handled by Grafana itself (see GF_SECURITY_* in docker-compose.yml).
+grafana.{$ZAAS_DOMAIN:zaas.at} {
+
+    # Distributed tracing: creates a root span and propagates traceparent to upstream.
+    tracing {
+        span caddy-ingress
+    }
+
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        -Server
+    }
+
+    reverse_proxy grafana:3000
+}

@@ -1,0 +1,27 @@
+commit-msg:
+  commands:
+    commitlint:
+      run: npx commitlint --edit {1}
+
+pre-commit:
+  commands:
+    fmt:
+      glob: "api/**/*.go"
+      run: |
+        unformatted=$(gofmt -s -l {staged_files})
+        if [ -n "$unformatted" ]; then
+          echo "ERROR: unformatted Go files - run: make fmt-fix"
+          echo "$unformatted"
+          exit 1
+        fi
+    vet:
+      glob: "api/**/*.go"
+      run: cd api && go vet ./...
+
+pre-push:
+  commands:
+    lint:
+      glob: "api/**/*.go"
+      run: cd api && golangci-lint run ./...
+    tests:
+      run: cd api && go test ./...

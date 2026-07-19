@@ -1,0 +1,64 @@
+# Local development Caddyfile.
+# HTTP only on port 80 - no TLS, no HSTS (dev convenience).
+# Routes /api/* to the Go API container.
+# Routes /* to the Astro dev server container (port 4321, hot-reload).
+# Security headers are included so local behaviour matches production.
+
+{
+    # Enable Prometheus metrics on the admin API (caddy:2019/metrics).
+    metrics
+}
+
+:80 {
+
+    # Distributed tracing: creates a root span and propagates traceparent to upstream.
+    tracing {
+        span caddy-ingress
+    }
+
+    # Security headers (mirrors production minus HSTS and HTTPS-only directives).
+    header {
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+    }
+
+    # Reject oversized request bodies before they reach application containers.
+    request_body {
+        max_size 1MB
+    }
+
+    # API and internal probe routes -> Go API container
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+    handle /healthz {
+        reverse_proxy api:8080
+    }
+    handle /readyz {
+        reverse_proxy api:8080
+    }
+
+    # Everything else -> Astro dev server (hot-reload)
+    # Vite pre-bundles large deps (e.g. @scalar/api-reference) on first request;
+    # the default 30s read timeout is too short for initial bundling.
+    handle {
+        reverse_proxy web:4321 {
+            transport http {
+                read_timeout 120s
+            }
+        }
+    }
+}
+
+# Grafana UI - accessible at http://grafana.localhost in local dev.
+# *.localhost resolves to 127.0.0.1 natively (RFC 6761) - no /etc/hosts needed.
+# Plain HTTP only (prefix forces no TLS attempt).
+http://grafana.localhost {
+
+    # Distributed tracing: creates a root span and propagates traceparent to upstream.
+    tracing {
+        span caddy-ingress
+    }
+
+    reverse_proxy grafana:3000
+}

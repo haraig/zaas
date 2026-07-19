@@ -1,0 +1,134 @@
+---
+import ToolLayout from "../../layouts/ToolLayout.astro";
+import GenerateButton from "../../components/GenerateButton.astro";
+import CopyButton from "../../components/CopyButton.astro";
+import ApiCallPanel from "../../components/ApiCallPanel.astro";
+
+import RateLimitNotice from "../../components/RateLimitNotice.astro";
+---
+
+<ToolLayout
+  title="Lorem Ipsum"
+  heading="Lorem Ipsum"
+  description="Generate lorem ipsum placeholder text by sentence or paragraph."
+>
+  <!-- Controls -->
+  <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-center mb-8">
+    <div>
+      <label for="lorem-mode" class="block text-sm font-medium mb-1">Mode</label>
+      <select
+        id="lorem-mode"
+        class="rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      >
+        <option value="paragraphs" selected>Paragraphs</option>
+        <option value="sentences">Sentences</option>
+      </select>
+    </div>
+    <div id="paragraphs-input-group">
+      <label for="lorem-paragraphs" class="block text-sm font-medium mb-1">Paragraphs</label>
+      <input
+        type="number"
+        id="lorem-paragraphs"
+        min="1"
+        max="10"
+        value="1"
+        class="w-24 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <div id="sentences-input-group" class="hidden">
+      <label for="lorem-sentences" class="block text-sm font-medium mb-1">Sentences</label>
+      <input
+        type="number"
+        id="lorem-sentences"
+        min="1"
+        max="50"
+        value="5"
+        class="w-24 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <div>
+      <label for="lorem-count" class="block text-sm font-medium mb-1">Count</label>
+      <input
+        type="number"
+        id="lorem-count"
+        min="1"
+        max="10"
+        value="1"
+        class="w-24 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <GenerateButton label="Generate" loadingLabel="Generating..." />
+  </div>
+
+  <!-- Result -->
+  <div
+    id="lorem-result-container"
+    class="hidden rounded-lg border border-border dark:border-border-dark bg-surface-alt dark:bg-surface-alt-dark p-6"
+  >
+    <div class="flex items-start justify-between gap-2">
+      <pre id="lorem-result" class="font-mono text-sm flex-1 whitespace-pre-wrap"></pre>
+      <CopyButton targetId="lorem-result" />
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div
+    id="lorem-error"
+    role="alert" class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
+  >
+  </div>
+
+  <!-- Rate Limit Notice -->
+  <RateLimitNotice />
+
+  <!-- API Call Panel -->
+  <ApiCallPanel />
+</ToolLayout>
+
+<script>
+  import { initToolRunner } from "../../scripts/toolRunner";
+
+  const modeSelect = document.getElementById("lorem-mode") as HTMLSelectElement;
+  const paragraphsInput = document.getElementById("lorem-paragraphs") as HTMLInputElement;
+  const sentencesInput = document.getElementById("lorem-sentences") as HTMLInputElement;
+  const countInput = document.getElementById("lorem-count") as HTMLInputElement;
+  const paragraphsGroup = document.getElementById("paragraphs-input-group")!;
+  const sentencesGroup = document.getElementById("sentences-input-group")!;
+  const resultEl = document.getElementById("lorem-result")!;
+
+  modeSelect.addEventListener("change", () => {
+    const isParagraphs = modeSelect.value === "paragraphs";
+    paragraphsGroup.classList.toggle("hidden", !isParagraphs);
+    sentencesGroup.classList.toggle("hidden", isParagraphs);
+  });
+
+  initToolRunner({
+    resultContainerId: "lorem-result-container",
+    errorElId: "lorem-error",
+    buildPath() {
+      const mode = modeSelect.value;
+      const count = Math.max(1, Math.min(10, parseInt(countInput.value, 10) || 1));
+      countInput.value = String(count);
+
+      const params = new URLSearchParams();
+      params.set("count", String(count));
+
+      if (mode === "paragraphs") {
+        const paragraphs = Math.max(1, Math.min(10, parseInt(paragraphsInput.value, 10) || 1));
+        paragraphsInput.value = String(paragraphs);
+        params.set("paragraphs", String(paragraphs));
+      } else {
+        const sentences = Math.max(1, Math.min(50, parseInt(sentencesInput.value, 10) || 5));
+        sentencesInput.value = String(sentences);
+        params.set("sentences", String(sentences));
+      }
+
+      return `/api/v1/lorem?${params.toString()}`;
+    },
+    renderResults(json) {
+      const data = json as { result?: string; results?: string[] };
+      const count = parseInt(countInput.value, 10) || 1;
+      resultEl.textContent = count === 1 ? (data.result ?? "") : (data.results ?? []).join("\n\n");
+    },
+  });
+</script>

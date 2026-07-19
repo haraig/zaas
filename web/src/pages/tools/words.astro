@@ -1,0 +1,154 @@
+---
+import ToolLayout from "../../layouts/ToolLayout.astro";
+import GenerateButton from "../../components/GenerateButton.astro";
+import CopyButton from "../../components/CopyButton.astro";
+import ApiCallPanel from "../../components/ApiCallPanel.astro";
+
+import RateLimitNotice from "../../components/RateLimitNotice.astro";
+---
+
+<ToolLayout
+  title="Random Words"
+  heading="Random Words"
+  description="Generate random words - general vocabulary, Docker-style adjective_name, or Ubuntu-style Adjective Animal."
+>
+  <!-- Controls -->
+  <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-center flex-wrap mb-8">
+    <div>
+      <label for="words-style" class="block text-sm font-medium mb-1">Style</label>
+      <select
+        id="words-style"
+        class="rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      >
+        <option value="random" selected>Random</option>
+        <option value="docker">Docker (adjective_name)</option>
+        <option value="ubuntu">Ubuntu (Adjective Animal)</option>
+      </select>
+    </div>
+    <div id="words-count-row">
+      <label for="words-words" class="block text-sm font-medium mb-1">Words</label>
+      <input
+        type="number"
+        id="words-words"
+        min="1"
+        max="20"
+        value="3"
+        class="w-24 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <div>
+      <label for="words-separator" class="block text-sm font-medium mb-1">Separator</label>
+      <input
+        type="text"
+        id="words-separator"
+        maxlength="5"
+        value=""
+        placeholder="default"
+        class="w-24 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <div class="flex items-end gap-2 pb-2">
+      <label class="flex items-center gap-2 text-sm font-medium cursor-pointer">
+        <input
+          type="checkbox"
+          id="words-capitalize"
+          class="rounded border border-border dark:border-border-dark accent-accent"
+        />
+        Capitalize
+      </label>
+    </div>
+    <div>
+      <label for="words-count" class="block text-sm font-medium mb-1">Count</label>
+      <input
+        type="number"
+        id="words-count"
+        min="1"
+        max="100"
+        value="1"
+        class="w-24 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <GenerateButton label="Generate" loadingLabel="Generating..." />
+  </div>
+
+  <!-- Result -->
+  <div
+    id="words-result-container"
+    class="hidden rounded-lg border border-border dark:border-border-dark bg-surface-alt dark:bg-surface-alt-dark p-6"
+  >
+    <div class="flex items-start justify-between gap-2">
+      <div id="words-result" class="font-mono text-lg flex-1 whitespace-pre-wrap"></div>
+      <CopyButton targetId="words-result" />
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div
+    id="words-error"
+    role="alert" class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
+  >
+  </div>
+
+  <!-- Rate Limit Notice -->
+  <RateLimitNotice />
+
+  <!-- API Call Panel -->
+  <ApiCallPanel />
+</ToolLayout>
+
+<script>
+  import { initToolRunner } from "../../scripts/toolRunner";
+
+  const styleSelect = document.getElementById("words-style") as HTMLSelectElement;
+  const wordsInput = document.getElementById("words-words") as HTMLInputElement;
+  const wordsCountRow = document.getElementById("words-count-row")!;
+  const separatorInput = document.getElementById("words-separator") as HTMLInputElement;
+  const capitalizeCheckbox = document.getElementById("words-capitalize") as HTMLInputElement;
+  const countInput = document.getElementById("words-count") as HTMLInputElement;
+  const resultEl = document.getElementById("words-result")!;
+
+  function updateWordsVisibility() {
+    const isRandom = styleSelect.value === "random";
+    wordsCountRow.style.display = isRandom ? "" : "none";
+  }
+
+  styleSelect.addEventListener("change", updateWordsVisibility);
+  updateWordsVisibility();
+
+  initToolRunner({
+    resultContainerId: "words-result-container",
+    errorElId: "words-error",
+    buildPath() {
+      const style = styleSelect.value;
+      const count = Math.max(1, Math.min(100, parseInt(countInput.value, 10) || 1));
+      countInput.value = String(count);
+
+      const params = new URLSearchParams();
+      params.set("style", style);
+      params.set("count", String(count));
+
+      if (style === "random") {
+        const words = Math.max(1, Math.min(20, parseInt(wordsInput.value, 10) || 3));
+        wordsInput.value = String(words);
+        params.set("words", String(words));
+      }
+
+      const separator = separatorInput.value;
+      if (separator !== "") {
+        params.set("separator", separator);
+      }
+
+      if (capitalizeCheckbox.checked) {
+        params.set("capitalize", "true");
+      }
+
+      return `/api/v1/words?${params.toString()}`;
+    },
+    renderResults(json) {
+      const data = json as { result?: string; results?: string[] };
+      const count = parseInt(countInput.value, 10) || 1;
+      const values: string[] = count === 1 ? [data.result ?? ""] : (data.results ?? []);
+      resultEl.textContent = values.join("\n");
+    },
+  });
+</script>

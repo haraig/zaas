@@ -1,0 +1,28 @@
+---
+/**
+ * DocsLayout wraps the Scalar API playground page.
+ * It reuses BaseLayout's <head> (theme init, meta, favicon) and body classes
+ * but renders a slim breadcrumb bar instead of the full Header/Footer.
+ */
+import BaseLayout from "./BaseLayout.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<BaseLayout {title} {description} noHeaderFooter>
+  <header class="fixed top-0 left-0 right-0 h-12 z-50 bg-accent flex items-center px-4 gap-3 font-sans">
+    <a href="/" class="text-indigo-200 hover:text-white text-sm font-medium no-underline transition-colors"
+      >&larr; ZaaS Home</a
+    >
+    <span class="text-indigo-400 text-base">/</span>
+    <span class="text-white text-base font-semibold">{title}</span>
+  </header>
+  <div class="absolute top-12 left-0 right-0 bottom-0">
+    <slot />
+  </div>
+</BaseLayout>

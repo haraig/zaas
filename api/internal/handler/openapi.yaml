@@ -1,0 +1,894 @@
+openapi: "3.0.3"
+info:
+  title: ZaaS - Zufall as a Service
+  description: |
+    **Zufall as a Service** - free randomness API. Roll dice, generate UUIDs, pick
+    random colors, get random geographic coordinates, generate passwords, random words,
+    lorem ipsum, SSH keypairs, and more.
+
+    **Base URL:** `https://zaas.at/api/v1`
+
+    **Authentication:** All endpoints are usable anonymously. Provide an
+    `Authorization: Bearer <api_key>` header to use your registered API key and
+    receive a higher rate limit. Obtain an API key via `POST /auth/register`.
+
+    **Rate limiting:** Anonymous requests are rate-limited per IP. Authenticated
+    requests are rate-limited per API key. The current limits are returned in
+    `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers.
+    A `429` response includes a `Retry-After` header.
+
+    **Response envelope:** Every successful response is wrapped in
+    `{result, meta}` (single) or `{results, meta}` (multiple). The `meta` object
+    echoes the resolved request parameters, the request ID, and a timestamp for
+    reproducibility and support triage.
+  version: "1.0.0"
+  license:
+    name: MIT
+  termsOfService: https://zaas.at/imprint
+  contact:
+    name: ZaaS
+    url: https://zaas.at
+    email: hello@zaas.at
+
+servers:
+  - url: https://zaas.at/api/v1
+    description: Production
+
+security:
+  - {}
+  - BearerAuth: []
+
+tags:
+  - name: Random
+    description: Randomness endpoints - no API key required (rate limit applies).
+  - name: Auth
+    description: API key registration and management.
+
+paths:
+  /dice:
+    get:
+      operationId: rollDice
+      tags: [Random]
+      summary: Roll dice
+      parameters:
+        - name: sides
+          in: query
+          description: Number of sides (4, 6, 8, 10, 12, 20, 100)
+          schema:
+            type: integer
+            default: 6
+            enum: [4, 6, 8, 10, 12, 20, 100]
+        - name: count
+          in: query
+          description: Number of dice to roll (1-100)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Dice roll result
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SingleIntResult"
+                  - $ref: "#/components/schemas/MultiIntResult"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /coin:
+    get:
+      operationId: flipCoin
+      tags: [Random]
+      summary: Flip a coin
+      responses:
+        "200":
+          description: Coin flip result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SingleStringResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /number:
+    get:
+      operationId: generateNumber
+      tags: [Random]
+      summary: Generate random number(s)
+      parameters:
+        - name: min
+          in: query
+          description: Minimum value (inclusive, default 0)
+          schema:
+            type: integer
+            default: 0
+        - name: max
+          in: query
+          description: Maximum value (inclusive, default 100)
+          schema:
+            type: integer
+            default: 100
+        - name: count
+          in: query
+          description: How many numbers to generate (1-100)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 100
+        - name: float
+          in: query
+          description: Return floating-point numbers
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Random number(s)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SingleNumberResult"
+                  - $ref: "#/components/schemas/MultiNumberResult"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /uuid:
+    get:
+      operationId: generateUUID
+      tags: [Random]
+      summary: Generate UUID v4
+      parameters:
+        - name: count
+          in: query
+          description: Number of UUIDs to generate (1-100)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 100
+        - name: format
+          in: query
+          description: UUID format
+          schema:
+            type: string
+            default: standard
+            enum: [standard, no-dashes, urn]
+      responses:
+        "200":
+          description: UUID(s)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SingleStringResult"
+                  - $ref: "#/components/schemas/MultiStringResult"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /color:
+    get:
+      operationId: generateColor
+      tags: [Random]
+      summary: Generate random color(s)
+      parameters:
+        - name: format
+          in: query
+          description: Color format
+          schema:
+            type: string
+            default: hex
+            enum: [hex, rgb, hsl]
+        - name: count
+          in: query
+          description: Number of colors to generate (1-100)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Random color(s)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SingleStringResult"
+                  - $ref: "#/components/schemas/MultiStringResult"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /coordinates:
+    get:
+      operationId: generateCoordinates
+      tags: [Random]
+      summary: Generate random geographic coordinates
+      parameters:
+        - name: count
+          in: query
+          description: Number of coordinate pairs to generate (1-100)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 100
+        - name: land_only
+          in: query
+          description: Best-effort attempt to return land coordinates
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Random coordinate(s)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SingleCoordinateResult"
+                  - $ref: "#/components/schemas/MultiCoordinateResult"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /password:
+    get:
+      operationId: generatePassword
+      tags: [Random]
+      summary: Generate random password(s)
+      description: |
+        Generates random passwords from configurable character sets. At least one of
+        uppercase, lowercase, digits, or symbols must be enabled.
+      parameters:
+        - name: length
+          in: query
+          description: Password length (8-128)
+          schema:
+            type: integer
+            default: 16
+            minimum: 8
+            maximum: 128
+        - name: uppercase
+          in: query
+          description: Include uppercase letters (A-Z)
+          schema:
+            type: boolean
+            default: true
+        - name: lowercase
+          in: query
+          description: Include lowercase letters (a-z)
+          schema:
+            type: boolean
+            default: true
+        - name: digits
+          in: query
+          description: Include digits (0-9)
+          schema:
+            type: boolean
+            default: true
+        - name: symbols
+          in: query
+          description: "Include symbols (!@#$%^&*()-_=+)"
+          schema:
+            type: boolean
+            default: true
+        - name: count
+          in: query
+          description: Number of passwords to generate (1-100)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Random password(s)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SingleStringResult"
+                  - $ref: "#/components/schemas/MultiStringResult"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /words:
+    get:
+      operationId: generateWords
+      tags: [Random]
+      summary: Generate random word strings
+      description: |
+        Generates random word strings. The `style` parameter controls the word list and structure:
+
+        - `random` (default): picks from a ~4000-word general English list. The `words` parameter
+          controls how many words are joined. Default separator is `-`.
+        - `docker`: adjective + scientist/mathematician surname (e.g. `modest_einstein`). Always
+          produces 2 words. Default separator is `_`, default capitalize is `false`.
+        - `ubuntu`: adjective + animal (e.g. `Noble Numbat`). Always produces 2 words.
+          Default separator is ` ` (space), default capitalize is `true`.
+
+        When `style` is `docker` or `ubuntu`, the `words` parameter is ignored. The `separator`
+        and `capitalize` parameters can override the style defaults.
+      parameters:
+        - name: style
+          in: query
+          description: Word generation style
+          schema:
+            type: string
+            default: random
+            enum: [random, docker, ubuntu]
+        - name: words
+          in: query
+          description: Number of words per result (1-20). Ignored when style is docker or ubuntu.
+          schema:
+            type: integer
+            default: 4
+            minimum: 1
+            maximum: 20
+        - name: separator
+          in: query
+          description: Separator between words (max 5 chars). Defaults to - for random, _ for docker, space for ubuntu.
+          schema:
+            type: string
+            maxLength: 5
+        - name: capitalize
+          in: query
+          description: Capitalize first letter of each word. Defaults to false for random and docker, true for ubuntu.
+          schema:
+            type: boolean
+        - name: count
+          in: query
+          description: Number of results to generate (1-100)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Random word string(s)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SingleStringResult"
+                  - $ref: "#/components/schemas/MultiStringResult"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /lorem:
+    get:
+      operationId: generateLorem
+      tags: [Random]
+      summary: Generate lorem ipsum text
+      description: |
+        Generates lorem ipsum placeholder text. Use `paragraphs` for paragraph-based output
+        or `sentences` for sentence-based output. If both are provided, `sentences` takes
+        precedence. Each paragraph contains 3-7 sentences; each sentence is 8-16 words.
+        The first result always begins with the classic opening sentence.
+      parameters:
+        - name: paragraphs
+          in: query
+          description: Number of paragraphs per result (1-10). Ignored if sentences is set.
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 10
+        - name: sentences
+          in: query
+          description: Number of sentences per result (1-50). Overrides paragraphs when set.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - name: count
+          in: query
+          description: Number of results to generate (1-10)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 10
+      responses:
+        "200":
+          description: Lorem ipsum text
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SingleStringResult"
+                  - $ref: "#/components/schemas/MultiStringResult"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /ssh-key:
+    get:
+      operationId: generateSSHKey
+      tags: [Random]
+      summary: Generate SSH keypair(s)
+      description: |
+        Generates SSH keypairs. ed25519 keys are always 256-bit (the `bits` parameter is
+        ignored for ed25519). RSA supports 2048 or 4096 bits. Count is capped at 5 because
+        RSA key generation is CPU-intensive.
+      parameters:
+        - name: type
+          in: query
+          description: Key algorithm
+          schema:
+            type: string
+            default: ed25519
+            enum: [ed25519, rsa]
+        - name: bits
+          in: query
+          description: RSA key size in bits (ignored for ed25519)
+          schema:
+            type: integer
+            default: 4096
+            enum: [2048, 4096]
+        - name: comment
+          in: query
+          description: Key comment (max 128 chars)
+          schema:
+            type: string
+            maxLength: 128
+        - name: count
+          in: query
+          description: Number of keypairs to generate (1-5)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 5
+      responses:
+        "200":
+          description: SSH keypair(s)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SingleSSHKeyResult"
+                  - $ref: "#/components/schemas/MultiSSHKeyResult"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/register:
+    post:
+      operationId: authRegister
+      tags: [Auth]
+      summary: Register for an API key
+      description: Submit email and display name to receive a verification email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "202":
+          description: Accepted - verification email sent (always returns 202 to prevent enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /auth/verify:
+    post:
+      operationId: authVerify
+      tags: [Auth]
+      summary: Verify email and receive API key
+      description: Consumes the one-time verification token from the email link and returns an API key. Must be called via a POST (e.g. from the /verify landing page) to prevent mail scanners from consuming the token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRequest"
+      responses:
+        "200":
+          description: Verification successful - API key returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResponse"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /auth/reissue:
+    post:
+      operationId: authReissue
+      tags: [Auth]
+      summary: Request API key re-issue
+      description: Submit email to receive a re-issue verification email. Old key will be revoked upon verification.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReissueRequest"
+      responses:
+        "202":
+          description: Accepted - re-issue verification email sent (always returns 202)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          $ref: "#/components/responses/InvalidParam"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /openapi.yaml:
+    get:
+      operationId: getOpenAPISpec
+      tags: [Random]
+      summary: Retrieve the OpenAPI specification
+      description: Returns the current OpenAPI 3.0 specification for this API in YAML format.
+      responses:
+        "200":
+          description: OpenAPI specification
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+components:
+  schemas:
+    Meta:
+      type: object
+      required: [endpoint, timestamp, params]
+      properties:
+        endpoint:
+          type: string
+          example: /api/v1/uuid
+          description: The API path that was called
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when the request was processed
+        params:
+          type: object
+          description: Echo of the request parameters as resolved by the server, including defaults
+        request_id:
+          type: string
+          description: Unique request identifier, useful for support triage
+
+    SingleStringResult:
+      type: object
+      required: [result, meta]
+      properties:
+        result:
+          type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    MultiStringResult:
+      type: object
+      required: [results, meta]
+      properties:
+        results:
+          type: array
+          items:
+            type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    SingleIntResult:
+      type: object
+      required: [result, meta]
+      properties:
+        result:
+          type: integer
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    MultiIntResult:
+      type: object
+      required: [results, meta]
+      properties:
+        results:
+          type: array
+          items:
+            type: integer
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    SingleNumberResult:
+      type: object
+      required: [result, meta]
+      properties:
+        result:
+          type: number
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    MultiNumberResult:
+      type: object
+      required: [results, meta]
+      properties:
+        results:
+          type: array
+          items:
+            type: number
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    Coordinate:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        lon:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+
+    SingleCoordinateResult:
+      type: object
+      required: [result, meta]
+      properties:
+        result:
+          $ref: "#/components/schemas/Coordinate"
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    MultiCoordinateResult:
+      type: object
+      required: [results, meta]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Coordinate"
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    SSHKey:
+      type: object
+      required: [private_key, public_key, fingerprint]
+      properties:
+        private_key:
+          type: string
+          description: PEM-encoded private key (OpenSSH format)
+        public_key:
+          type: string
+          description: Public key in authorized_keys format
+        fingerprint:
+          type: string
+          description: SHA-256 fingerprint of the public key
+
+    SingleSSHKeyResult:
+      type: object
+      required: [result, meta]
+      properties:
+        result:
+          $ref: "#/components/schemas/SSHKey"
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    MultiSSHKeyResult:
+      type: object
+      required: [results, meta]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SSHKey"
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    RegisterRequest:
+      type: object
+      required: [email, display_name]
+      properties:
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    VerifyRequest:
+      type: object
+      required: [token, type]
+      properties:
+        token:
+          type: string
+          description: One-time verification token from the email link
+        type:
+          type: string
+          enum: [registration, reissue]
+          description: Token type matching the registration or reissue flow
+
+    ReissueRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    AcceptedResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    VerifyResponse:
+      type: object
+      required: [api_key, message]
+      properties:
+        api_key:
+          type: string
+        message:
+          type: string
+
+    Problem:
+      type: object
+      description: "RFC 9457 Problem Details (https://datatracker.ietf.org/doc/html/rfc9457)"
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI reference identifying the problem type
+          example: "https://zaas.at/errors/invalid-param"
+        title:
+          type: string
+          description: Short human-readable summary of the problem type
+          example: "Bad Request"
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400
+        detail:
+          type: string
+          description: Human-readable explanation of this specific occurrence
+          example: "sides must be one of 4,6,8,10,12,20,100"
+        instance:
+          type: string
+          description: URI reference identifying the specific request that caused the problem
+          example: "/api/v1/dice"
+        code:
+          type: string
+          enum: [RATE_LIMITED, INVALID_PARAM, INTERNAL_ERROR, INVALID_API_KEY, SERVICE_UNAVAILABLE]
+          description: Machine-readable error code (ZaaS extension)
+        retry_after:
+          type: integer
+          description: Seconds to wait before retrying (ZaaS extension, only present for RATE_LIMITED)
+        request_id:
+          type: string
+          description: Unique request identifier for support triage (ZaaS extension)
+
+  responses:
+    InvalidParam:
+      description: Invalid query parameter
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    Unauthorized:
+      description: Invalid or revoked API key
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    ServiceUnavailable:
+      description: Service temporarily unavailable (e.g. database not configured)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: "API key in format: zaas_<32 hex chars>"

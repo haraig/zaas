@@ -1,0 +1,14 @@
+# Grafana dashboard provider.
+# Loads all JSON dashboards from /etc/grafana/provisioning/dashboards.
+
+apiVersion: 1
+
+providers:
+  - name: ZaaS
+    orgId: 1
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards

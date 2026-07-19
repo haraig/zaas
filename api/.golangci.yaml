@@ -1,0 +1,66 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - copyloopvar
+    - dupl
+    - durationcheck
+    - err113
+    - errchkjson
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - funlen
+    - gocheckcompilerdirectives
+    - gocritic
+    - godot
+    - misspell
+    - noctx
+    - prealloc
+    - predeclared
+    - revive
+    - unconvert
+    - unparam
+    - sloglint
+    - wastedassign
+  settings:
+    sloglint:
+      context: "scope"
+    dupl:
+      threshold: 100
+    exhaustive:
+      default-signifies-exhaustive: true
+    funlen:
+      lines: 80
+      statements: 50
+    godot:
+      scope: declarations
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupl
+          - err113
+          - funlen
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

@@ -1,0 +1,80 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const requiredVars = [
+  "PUBLIC_IMPRINT_NAME",
+  "PUBLIC_IMPRINT_ADDRESS",
+  "PUBLIC_IMPRINT_EMAIL",
+] as const;
+
+if (import.meta.env.PROD) {
+  for (const varName of requiredVars) {
+    if (!import.meta.env[varName]) {
+      throw new Error(
+        `Build error: ${varName} is required but not set. ` +
+          `Set it in your environment before running the production build.`,
+      );
+    }
+  }
+}
+
+const name = import.meta.env.PUBLIC_IMPRINT_NAME || "[Not configured]";
+const address = import.meta.env.PUBLIC_IMPRINT_ADDRESS || "[Not configured]";
+const email = import.meta.env.PUBLIC_IMPRINT_EMAIL || "[Not configured]";
+---
+
+<BaseLayout
+  title="Imprint - ZaaS"
+  description="Legal imprint for ZaaS - Zufall as a Service, as required by Austrian ECG § 5."
+>
+  <section class="py-12 sm:py-16">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-8">Imprint</h1>
+
+      <div class="space-y-8 text-text-secondary dark:text-text-secondary-dark">
+        <div>
+          <p class="text-sm uppercase tracking-wide font-semibold mb-4">
+            Information according to
+            <a
+              href="https://www.ris.bka.gv.at/GeltendeFassung.wxe?Abfrage=Bundesnormen&Gesetzesnummer=20001703"
+              class="text-accent hover:text-accent-hover transition-colors"
+              target="_blank"
+              rel="noopener noreferrer">§ 5 ECG</a
+            >
+            (E-Commerce-Gesetz)
+          </p>
+        </div>
+
+        <div class="space-y-1">
+          <p class="font-medium text-text-primary dark:text-text-primary-dark">{name}</p>
+          {address.split("\\n").map((line: string) => <p>{line}</p>)}
+        </div>
+
+        <div>
+          <h2 class="text-sm uppercase tracking-wide font-semibold mb-2">Contact</h2>
+          <p>
+            Email:
+            <a
+              href={`mailto:${email}`}
+              class="text-accent hover:text-accent-hover transition-colors">{email}</a
+            >
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2 class="text-sm uppercase tracking-wide font-semibold mb-2">Privacy</h2>
+          <p>
+            See our <a href="/privacy" class="text-accent hover:text-accent-hover transition-colors"
+              >Privacy Policy</a
+            >
+            / <a href="/datenschutz" class="text-accent hover:text-accent-hover transition-colors"
+              >Datenschutzerklärung</a
+            >.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,40 @@
+package wordlists
+
+// UbuntuAnimals is a list of animal names used in ubuntu-style names
+// (e.g. Noble Numbat). Alliterative pairings with adjectives are preferred
+// but any combination is valid.
+var UbuntuAnimals = []string{
+	"albatross", "alpaca", "antelope", "armadillo", "axolotl",
+	"baboon", "badger", "barracuda", "bat", "bear",
+	"beaver", "bison", "boar", "buffalo", "butterfly",
+	"camel", "capybara", "caracal", "cheetah", "chipmunk",
+	"cobra", "condor", "cormorant", "cougar", "coyote",
+	"crane", "crocodile", "crow", "dingo", "dolphin",
+	"donkey", "dragonfly", "dugong", "eagle", "echidna",
+	"eel", "elephant", "elk", "emu", "falcon",
+	"ferret", "flamingo", "fox", "frog", "gazelle",
+	"gecko", "gibbon", "giraffe", "gnu", "goat",
+	"gorilla", "grouse", "guanaco", "gull", "hamster",
+	"hare", "hawk", "hedgehog", "heron", "hippo",
+	"hornet", "horse", "hummingbird", "hyena", "ibis",
+	"iguana", "impala", "jackal", "jaguar", "jellyfish",
+	"kangaroo", "kestrel", "kingfisher", "kiwi", "koala",
+	"komodo", "kookaburra", "lemur", "leopard", "lion",
+	"llama", "lobster", "lynx", "macaw", "mamba",
+	"manta", "marmoset", "marten", "meerkat", "mongoose",
+	"moose", "moth", "narwhal", "newt", "nighthawk",
+	"numbat", "ocelot", "octopus", "okapi", "opossum",
+	"orangutan", "orca", "osprey", "ostrich", "otter",
+	"owl", "panda", "panther", "parrot", "peacock",
+	"pelican", "penguin", "porcupine", "porpoise", "puma",
+	"quail", "quokka", "rabbit", "raccoon", "raven",
+	"reindeer", "rhino", "roadrunner", "salamander", "salmon",
+	"sandpiper", "scorpion", "seahorse", "seal", "serval",
+	"shark", "skunk", "sloth", "snail", "snake",
+	"sparrow", "spider", "stork", "sturgeon", "swan",
+	"tapir", "tarantula", "tiger", "toad", "toucan",
+	"turtle", "uakari", "viper", "vulture", "walrus",
+	"warthog", "wasp", "weasel", "whale", "wildcat",
+	"wolf", "wolverine", "wombat", "woodpecker", "yak",
+	"zebra",
+}

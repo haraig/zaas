@@ -1,0 +1,124 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and fill in your actual values
+# DO NOT commit terraform.tfvars to version control!
+
+# Your Hetzner Cloud API token (generate at https://console.hetzner.cloud/projects)
+hcloud_token = "your_token_here"
+
+# Username created on the server
+user_name = "my-user"
+
+# Top-level domain for DNS zone (e.g., "example.com")
+domain_tld = "your_domain_here"
+
+# Server name (used as subdomain, e.g., "my-server" for my-server.example.com)
+server_name = "my-server"
+
+# Optional SSH port (defaults to 2222)
+# ssh_port = 2222
+
+# Optional list of authorized SSH public keys.
+# If omitted or empty, ssh_public_key_file will be used.
+# ssh_authorized_keys = ["ssh-ed25519 AAAA... user@example.com"]
+
+# Optional server type (defaults to "cx23")
+# server_type = "cx23"
+
+# Optional server image (defaults to "ubuntu-26.04")
+# image = "ubuntu-26.04"
+
+# Optional datacenter location (defaults to "nbg1")
+# location = "nbg1"
+
+# Optional SSH public key file path (defaults to "~/.ssh/id_ed25519_hetzner.pub")
+# ssh_public_key_file = "~/.ssh/id_ed25519_hetzner.pub"
+
+# Optional: Enable www subdomain A record (defaults to false)
+# enable_www_record = false
+
+# Optional: Enable server_name subdomain A/AAAA records (defaults to false)
+# Disable this to avoid awkward records like zaas.zaas.at
+# enable_server_name_record = false
+
+# Optional: Enable grafana subdomain A/AAAA records (defaults to false)
+# enable_grafana_record = false
+
+# Optional: Enable reverse DNS entries for the server IPv4 and IPv6 addresses (defaults to false)
+# enable_rdns = false
+
+# Extra DNS records for Migadu email hosting.
+# Copy this block as-is - values are specific to zaas.at + Migadu.
+# Each entry can contain multiple values for the same RRset.
+extra_dns_records = [
+  # TXT Records (Verification and SPF)
+  {
+    name   = "@"
+    type   = "TXT"
+    values = [
+        # Verification Record
+        "\"hosted-email-verify=replace-me\"",
+        # SPF Record
+        "\"v=spf1 include:spf.migadu.com -all\""
+    ]
+  },
+  # Mail Exchange (MX) Records
+  {
+    name   = "@"
+    type   = "MX"
+    values = ["10 aspmx1.migadu.com.", "20 aspmx2.migadu.com."]
+  },
+  # DKIM+ARC Key Records
+  {
+    name   = "key1._domainkey"
+    type   = "CNAME"
+    values = ["key1.zaas.at._domainkey.migadu.com."]
+  },
+  {
+    name   = "key2._domainkey"
+    type   = "CNAME"
+    values = ["key2.zaas.at._domainkey.migadu.com."]
+  },
+  {
+    name   = "key3._domainkey"
+    type   = "CNAME"
+    values = ["key3.zaas.at._domainkey.migadu.com."]
+  },
+  # DMARC Records (optional)
+  {
+    name   = "_dmarc"
+    type   = "TXT"
+    values = ["\"v=DMARC1; p=none; rua=mailto:dmarc-reports@zaas.at\""]
+  },
+  # Subdomain Addressing (optional)
+  {
+    name   = "*"
+    type   = "MX"
+    values = ["10 aspmx1.migadu.com.", "20 aspmx2.migadu.com."]
+  },
+  # Autoconfig / Autodiscovery Records (optional)
+  {
+    name   = "autoconfig"
+    type   = "CNAME"
+    values = ["autoconfig.migadu.com."]
+  },
+  {
+    name   = "_autodiscover._tcp"
+    type   = "SRV"
+    values = ["0 1 443 autodiscover.migadu.com."]
+  },
+  {
+    name   = "_submissions._tcp"
+    type   = "SRV"
+    values = ["0 1 465 smtp.migadu.com."]
+  },
+  {
+    name   = "_imaps._tcp"
+    type   = "SRV"
+    values = ["0 1 993 imap.migadu.com."]
+  },
+  {
+    name   = "_pop3s._tcp"
+    type   = "SRV"
+    values = ["0 1 995 pop.migadu.com."]
+  },
+]

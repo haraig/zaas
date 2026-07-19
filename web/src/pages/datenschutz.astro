@@ -1,0 +1,276 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const requiredVars = [
+  "PUBLIC_IMPRINT_NAME",
+  "PUBLIC_IMPRINT_ADDRESS",
+  "PUBLIC_IMPRINT_EMAIL",
+] as const;
+
+if (import.meta.env.PROD) {
+  for (const varName of requiredVars) {
+    if (!import.meta.env[varName]) {
+      throw new Error(
+        `Build error: ${varName} is required but not set. ` +
+          `Set it in your environment before running the production build.`,
+      );
+    }
+  }
+}
+
+const name = import.meta.env.PUBLIC_IMPRINT_NAME || "[Nicht konfiguriert]";
+const address = import.meta.env.PUBLIC_IMPRINT_ADDRESS || "[Nicht konfiguriert]";
+const email = import.meta.env.PUBLIC_IMPRINT_EMAIL || "[Nicht konfiguriert]";
+const privacyEmail = import.meta.env.PUBLIC_PRIVACY_EMAIL || email;
+---
+
+<BaseLayout
+  title="Datenschutzerklärung - ZaaS"
+  description="Datenschutzerklärung für ZaaS - Zufall as a Service. Generierte Ergebnisse werden niemals gespeichert oder protokolliert."
+  lang="de"
+  alternates={[
+    { hreflang: "de", href: "/datenschutz" },
+    { hreflang: "en", href: "/privacy" },
+  ]}
+>
+  <section class="py-12 sm:py-16">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-2">Datenschutzerklärung</h1>
+      <p class="text-sm text-text-secondary dark:text-text-secondary-dark mb-8">
+        In English: <a href="/privacy" class="text-accent hover:text-accent-hover transition-colors"
+          >Privacy Policy</a
+        >
+      </p>
+
+      <div class="space-y-8 text-text-secondary dark:text-text-secondary-dark">
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            1. Verantwortlicher
+          </h2>
+          <p class="font-medium text-text-primary dark:text-text-primary-dark">{name}</p>
+          {address.split("\\n").map((line: string) => <p>{line}</p>)}
+          <p class="mt-2">
+            E-Mail: <a
+              href={`mailto:${email}`}
+              class="text-accent hover:text-accent-hover transition-colors">{email}</a
+            >
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            2. Generierte Ergebnisse werden niemals gespeichert
+          </h2>
+          <p>
+            ZaaS speichert, protokolliert oder archiviert niemals Ergebnisse, die durch die API
+            generiert wurden - keine Würfelwürfe, keine UUIDs, keine Zufallszahlen, keine Farben,
+            keine Koordinaten und keine sonstigen Ausgaben werden in einem dauerhaften Speicher oder
+            einer Logdatei abgelegt. Ergebnisse existieren ausschließlich in der HTTP-Antwort, die
+            direkt an Ihren Client übermittelt wird.
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            3. Verarbeitete Daten
+          </h2>
+          <p class="mb-4">Bei der Nutzung von ZaaS werden folgende technische Daten verarbeitet:</p>
+          <ul class="space-y-3 list-disc list-inside">
+            <li>
+              <span class="font-medium text-text-primary dark:text-text-primary-dark"
+                >IP-Adresse</span
+              > - wird vorübergehend für das Rate-Limiting (nur im Arbeitsspeicher, nie auf Datenträgern
+              geschrieben) sowie in Server-Zugriffslogs zu Betriebszwecken erfasst.
+            </li>
+            <li>
+              <span class="font-medium text-text-primary dark:text-text-primary-dark"
+                >HTTP-Anfragemetadaten</span
+              > - HTTP-Methode, Anfragepfad, HTTP-Statuscode und Antwortdauer werden in Server-Logs zu
+              Betriebszwecken erfasst. Inhalte von Anfragen oder Antworten werden nicht protokolliert.
+            </li>
+            <li>
+              <span class="font-medium text-text-primary dark:text-text-primary-dark"
+                >Anfrage-ID</span
+              > - ein zufällig generierter Bezeichner pro Anfrage zur Log-Korrelation. Dieser ist nicht
+              mit einer Benutzeridentität verknüpft.
+            </li>
+          </ul>
+          <p class="mt-4">
+            <span class="font-medium text-text-primary dark:text-text-primary-dark"
+              >Rechtsgrundlage:</span
+            > Art. 6 Abs. 1 lit. f DSGVO - berechtigtes Interesse an der Sicherheit, Stabilität und dem
+            ordnungsgemäßen Betrieb des Dienstes (Rate-Limiting, Missbrauchsschutz, Fehlerdiagnose).
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            4. Cookies
+          </h2>
+          <p>Diese Website verwendet keine Cookies.</p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            5. Lokaler Speicher
+          </h2>
+          <p>
+            Ihre Theme-Präferenz (Hell- oder Dunkelmodus) wird im lokalen Speicher Ihres Browsers
+            unter dem Schlüssel <code
+              class="text-sm font-mono bg-surface-alt dark:bg-surface-alt-dark px-1 rounded"
+              >theme</code
+            > gespeichert. Diese Daten verlassen Ihr Gerät nicht und werden nie an den Server übermittelt.
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            6. Keine Analyse oder Verfolgung
+          </h2>
+          <p>
+            ZaaS verwendet keine Analysedienste, Werbenetzwerke oder Tracking-Skripte von
+            Drittanbietern. Es werden keine Daten über Ihr Verhalten auf dieser Website an Dritte
+            weitergegeben.
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            7. Infrastrukturanbieter
+          </h2>
+          <p>
+            ZaaS wird auf Infrastruktur von Drittanbietern betrieben, die innerhalb der Europäischen
+            Union tätig sind. Diese Anbieter können technische Daten (wie IP-Adressen) im Rahmen des
+            normalen Infrastrukturbetriebs verarbeiten. Sie sind durch Auftragsverarbeitungsverträge
+            gemäß Art. 28 DSGVO gebunden.
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            8. Kartenkacheln (Koordinaten-Tool)
+          </h2>
+          <p class="mb-4">
+            Wenn Sie das <strong>Zufällige Koordinaten</strong>-Tool verwenden und eine Karte
+            angezeigt wird, lädt Ihr Browser Kartenkacheln direkt vom Kachelserver der{" "}
+            <a
+              href="https://osmfoundation.org"
+              class="text-accent hover:text-accent-hover transition-colors"
+              target="_blank"
+              rel="noopener noreferrer">OpenStreetMap Foundation</a
+            > (OSMF) unter <code
+              class="text-sm font-mono bg-surface-alt dark:bg-surface-alt-dark px-1 rounded"
+              >tile.openstreetmap.org</code
+            >. Jede Kachelanfrage übermittelt Ihre IP-Adresse an die OSMF-Server. Die Leaflet-
+            Kartenbibliothek selbst ist in dieser Website gebündelt und wird lokal geladen - es
+            werden keine Daten für die Bibliotheks-Assets an ein CDN gesendet.
+          </p>
+          <p>
+            Wenn Sie das Koordinaten-Tool nicht verwenden, werden keine Kachelanfragen gestellt. Die
+            Datenschutzrichtlinie der OSMF ist abrufbar unter{" "}
+            <a
+              href="https://wiki.osmfoundation.org/wiki/Privacy_Policy"
+              class="text-accent hover:text-accent-hover transition-colors"
+              target="_blank"
+              rel="noopener noreferrer">wiki.osmfoundation.org/wiki/Privacy_Policy</a
+            >.
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            9. Datenspeicherung
+          </h2>
+          <p>
+            Server-Zugriffslogs werden gemäß der Standard-Rotationsrichtlinie der Infrastruktur
+            aufbewahrt und automatisch gelöscht. Rate-Limit-Zähler werden ausschließlich im
+            Arbeitsspeicher gehalten und gehen bei jedem Neustart des Dienstes verloren - sie werden
+            nie in einem dauerhaften Speicher abgelegt.
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            10. Ihre Rechte
+          </h2>
+          <p class="mb-4">Gemäß DSGVO haben Sie das Recht auf:</p>
+          <ul class="space-y-2 list-disc list-inside">
+            <li>Auskunft über die zu Ihrer Person gespeicherten Daten (Art. 15)</li>
+            <li>Berichtigung unrichtiger Daten (Art. 16)</li>
+            <li>Löschung Ihrer Daten („Recht auf Vergessenwerden") (Art. 17)</li>
+            <li>Einschränkung der Verarbeitung (Art. 18)</li>
+            <li>Datenübertragbarkeit (Art. 20)</li>
+            <li>Widerspruch gegen die Verarbeitung (Art. 21)</li>
+            <li>
+              Beschwerde bei der österreichischen Datenschutzbehörde (<a
+                href="https://www.dsb.gv.at"
+                class="text-accent hover:text-accent-hover transition-colors"
+                target="_blank"
+                rel="noopener noreferrer">dsb.gv.at</a
+              >)
+            </li>
+          </ul>
+          <p class="mt-4">
+            Zur Ausübung Ihrer Rechte wenden Sie sich bitte an <a
+              href={`mailto:${privacyEmail}`}
+              class="text-accent hover:text-accent-hover transition-colors">{privacyEmail}</a
+            >.
+          </p>
+        </div>
+
+        <hr class="border-border dark:border-border-dark" />
+
+        <div>
+          <h2
+            class="text-sm uppercase tracking-wide font-semibold mb-2 text-text-primary dark:text-text-primary-dark"
+          >
+            11. Änderungen dieser Erklärung
+          </h2>
+          <p>
+            Bei wesentlichen Änderungen dieser Datenschutzerklärung aktualisieren wir diese Seite.
+            Wir empfehlen Ihnen, sie regelmäßig zu überprüfen. Die weitere Nutzung von ZaaS nach
+            Änderungen gilt als Zustimmung zur aktualisierten Erklärung.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

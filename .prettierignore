@@ -1,0 +1,28 @@
+# Generated code
+api/internal/gen/
+
+# AI-generated spec and plan documents - not subject to formatting enforcement
+docs/superpowers/
+
+# Go dependencies and build artifacts
+api/vendor/
+api/**/*.sum
+
+# Web build and cache
+web/dist/
+web/.astro/
+web/node_modules/
+
+# Terraform state and local overrides
+infra/tofu/.terraform/
+infra/tofu/*.tfstate
+infra/tofu/*.tfstate.backup
+infra/tofu/*.tfvars
+
+# Lock files (auto-generated, formatting not meaningful)
+*.lock
+package-lock.json
+
+# Misc
+.env
+.env.*

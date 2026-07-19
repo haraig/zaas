@@ -1,0 +1,25 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="border-t border-border dark:border-border-dark mt-auto">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div class="text-sm text-text-secondary dark:text-text-secondary-dark">
+        &copy; {year} ZaaS - Zufall as a Service
+      </div>
+      <div class="flex gap-6 text-sm text-text-secondary dark:text-text-secondary-dark">
+        <a href="/docs" class="hover:text-accent transition-colors">API Docs</a>
+        <a href="/tools" class="hover:text-accent transition-colors">Tools</a>
+        <a href="/imprint" class="hover:text-accent transition-colors">Imprint</a>
+        <a href="/privacy" class="hover:text-accent transition-colors">Privacy</a>
+        <a
+          href="https://github.com/haraig/zaas"
+          class="hover:text-accent transition-colors"
+          target="_blank"
+          rel="noopener noreferrer">GitHub</a
+        >
+      </div>
+    </div>
+  </div>
+</footer>

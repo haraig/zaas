@@ -1,0 +1,12 @@
+ZaaS - Re-issue your API key
+
+You requested a new API key. Click the link below to confirm.
+Your existing key will be revoked.
+
+{{.VerificationURL}}
+
+This link expires in 24 hours. If you did not request this, you can ignore this email.
+
+--
+ZaaS - Zufall as a Service
+https://zaas.at

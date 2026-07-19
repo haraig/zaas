@@ -1,0 +1,95 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# Ensure only one deploy runs at a time; cancel any in-progress deploy for the same branch.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build, push, and deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+          REPO="${{ github.repository }}"
+          echo "image=ghcr.io/${REPO,,}/api" >> "$GITHUB_OUTPUT"
+          echo "tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set web image metadata
+        id: web-meta
+        run: |
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+          REPO="${{ github.repository }}"
+          echo "image=ghcr.io/${REPO,,}/web" >> "$GITHUB_OUTPUT"
+          echo "tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push API image
+        id: api-push
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: api
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+
+      - name: Build and push Web image
+        id: web-push
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: web
+          push: true
+          tags: |
+            ${{ steps.web-meta.outputs.image }}:${{ steps.web-meta.outputs.tag }}
+            ${{ steps.web-meta.outputs.image }}:latest
+          build-args: |
+            PUBLIC_API_BASE_URL=${{ vars.PUBLIC_API_BASE_URL }}
+            PUBLIC_IMPRINT_NAME=${{ vars.PUBLIC_IMPRINT_NAME }}
+            PUBLIC_IMPRINT_ADDRESS=${{ vars.PUBLIC_IMPRINT_ADDRESS }}
+            PUBLIC_IMPRINT_EMAIL=${{ vars.PUBLIC_IMPRINT_EMAIL }}
+
+      - name: Log web image digest
+        run: |
+          echo "Web image digest: ${{ steps.web-push.outputs.digest }}"
+          echo "Set ZAAS_WEB_IMAGE=ghcr.io/${{ github.repository_owner }}/zaas/web@${{ steps.web-push.outputs.digest }} in production .env to pin to this exact image."
+
+      - name: Trigger server redeploy via webhook
+        env:
+          DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+        run: |
+          PAYLOAD='{"ref":"main"}'
+          SIG="sha256=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$DEPLOY_WEBHOOK_SECRET" | sed 's/^.*= //')"
+          curl --fail --silent --show-error \
+            --max-time 60 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $SIG" \
+            -d "$PAYLOAD" \
+            https://zaas.at/deploy-hook/hooks/redeploy
+
+      - name: Health check
+        run: |
+          sleep 10
+          curl --fail --silent --show-error https://zaas.at/healthz

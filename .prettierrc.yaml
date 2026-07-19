@@ -1,0 +1,16 @@
+# Prettier configuration
+# Aligns with .editorconfig settings
+printWidth: 100
+tabWidth: 2
+useTabs: false
+semi: true
+singleQuote: false
+trailingComma: "all"
+bracketSpacing: true
+endOfLine: "lf"
+plugins:
+  - prettier-plugin-astro
+overrides:
+  - files: "*.astro"
+    options:
+      parser: "astro"

@@ -1,0 +1,12 @@
+[Unit]
+Description=ZaaS PostgreSQL backup (GFS rotation)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+ExecStart=/opt/zaas/deploy/scripts/backup-postgres.sh
+StandardOutput=journal
+StandardError=journal

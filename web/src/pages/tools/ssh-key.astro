@@ -1,0 +1,184 @@
+---
+import ToolLayout from "../../layouts/ToolLayout.astro";
+import GenerateButton from "../../components/GenerateButton.astro";
+import ApiCallPanel from "../../components/ApiCallPanel.astro";
+
+import RateLimitNotice from "../../components/RateLimitNotice.astro";
+---
+
+<ToolLayout
+  title="SSH Key Generator"
+  heading="SSH Key Generator"
+  description="Generate ed25519 or RSA SSH keypairs ready to use."
+>
+  <!-- Controls -->
+  <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-center mb-8 flex-wrap">
+    <div>
+      <label for="sshkey-type" class="block text-sm font-medium mb-1">Type</label>
+      <select
+        id="sshkey-type"
+        class="rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      >
+        <option value="ed25519" selected>Ed25519</option>
+        <option value="rsa">RSA</option>
+      </select>
+    </div>
+    <div id="sshkey-bits-wrapper">
+      <label for="sshkey-bits" class="block text-sm font-medium mb-1">Bits</label>
+      <select
+        id="sshkey-bits"
+        class="rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      >
+        <option value="2048" selected>2048 bits</option>
+        <option value="4096">4096 bits</option>
+      </select>
+    </div>
+    <div>
+      <label for="sshkey-comment" class="block text-sm font-medium mb-1">Comment (optional)</label>
+      <input
+        type="text"
+        id="sshkey-comment"
+        maxlength="128"
+        placeholder="your@email.com"
+        class="w-48 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <div>
+      <label for="sshkey-count" class="block text-sm font-medium mb-1">Count</label>
+      <input
+        type="number"
+        id="sshkey-count"
+        min="1"
+        max="5"
+        value="1"
+        class="w-24 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <GenerateButton label="Generate" loadingLabel="Generating..." />
+  </div>
+
+  <!-- Result -->
+  <div
+    id="sshkey-result-container"
+    class="hidden rounded-lg border border-border dark:border-border-dark bg-surface-alt dark:bg-surface-alt-dark p-6"
+  >
+    <div id="sshkey-result"></div>
+  </div>
+
+  <!-- Error -->
+  <div
+    id="sshkey-error"
+    role="alert" class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
+  >
+  </div>
+
+  <!-- Rate Limit Notice -->
+  <RateLimitNotice />
+
+  <!-- API Call Panel -->
+  <ApiCallPanel />
+</ToolLayout>
+
+<script>
+  import { initToolRunner } from "../../scripts/toolRunner";
+  import { createInlineCopyButton } from "../../scripts/copyButton";
+
+  const typeSelect = document.getElementById("sshkey-type") as HTMLSelectElement;
+  const bitsWrapper = document.getElementById("sshkey-bits-wrapper")!;
+  const bitsSelect = document.getElementById("sshkey-bits") as HTMLSelectElement;
+  const commentInput = document.getElementById("sshkey-comment") as HTMLInputElement;
+  const countInput = document.getElementById("sshkey-count") as HTMLInputElement;
+  const resultEl = document.getElementById("sshkey-result")!;
+
+  function updateBitsVisibility() {
+    bitsWrapper.style.display = typeSelect.value === "rsa" ? "" : "none";
+  }
+  updateBitsVisibility();
+  typeSelect.addEventListener("change", updateBitsVisibility);
+
+  function escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function renderKeypair(
+    kp: { private_key: string; public_key: string; fingerprint: string },
+    container: HTMLElement,
+  ) {
+    const fields: { label: string; value: string; mono: boolean }[] = [
+      { label: "Private Key:", value: kp.private_key, mono: true },
+      { label: "Public Key:", value: kp.public_key, mono: true },
+      { label: "Fingerprint:", value: kp.fingerprint, mono: false },
+    ];
+
+    fields.forEach(({ label, value, mono }, i) => {
+      const header = document.createElement("div");
+      header.className = "flex items-center justify-between gap-2 mb-1";
+
+      const labelEl = document.createElement("p");
+      labelEl.className = "text-sm font-medium";
+      labelEl.textContent = label;
+      header.appendChild(labelEl);
+      header.appendChild(createInlineCopyButton(value));
+      container.appendChild(header);
+
+      if (mono) {
+        const pre = document.createElement("pre");
+        pre.className = `font-mono text-sm whitespace-pre-wrap break-all bg-surface dark:bg-surface-dark p-3 rounded${i < fields.length - 1 ? " mb-3" : ""}`;
+        pre.innerHTML = escapeHtml(value);
+        container.appendChild(pre);
+      } else {
+        const code = document.createElement("code");
+        code.className = "font-mono text-sm";
+        code.textContent = value;
+        container.appendChild(code);
+      }
+    });
+  }
+
+  initToolRunner({
+    resultContainerId: "sshkey-result-container",
+    errorElId: "sshkey-error",
+    buildPath() {
+      const type = typeSelect.value;
+      const count = Math.max(1, Math.min(5, parseInt(countInput.value, 10) || 1));
+      countInput.value = String(count);
+
+      const params = new URLSearchParams();
+      params.set("type", type);
+      params.set("count", String(count));
+      if (type === "rsa") params.set("bits", bitsSelect.value);
+      const comment = commentInput.value.trim();
+      if (comment) params.set("comment", comment);
+
+      return `/api/v1/ssh-key?${params.toString()}`;
+    },
+    renderResults(json) {
+      const data = json as {
+        result?: { private_key: string; public_key: string; fingerprint: string };
+        results?: { private_key: string; public_key: string; fingerprint: string }[];
+      };
+      const count = parseInt(countInput.value, 10) || 1;
+      const keypairs = count === 1 ? [data.result!] : (data.results ?? []);
+
+      resultEl.innerHTML = "";
+      keypairs.forEach((kp, i) => {
+        if (i > 0) {
+          const hr = document.createElement("hr");
+          hr.className = "my-6 border-border dark:border-border-dark";
+          resultEl.appendChild(hr);
+        }
+        if (count > 1) {
+          const heading = document.createElement("p");
+          heading.className = "text-sm font-semibold mb-3";
+          heading.textContent = `Key ${i + 1}`;
+          resultEl.appendChild(heading);
+        }
+        renderKeypair(kp, resultEl);
+      });
+    },
+  });
+</script>

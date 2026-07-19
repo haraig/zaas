@@ -1,0 +1,114 @@
+---
+import ToolLayout from "../../layouts/ToolLayout.astro";
+import GenerateButton from "../../components/GenerateButton.astro";
+import ApiCallPanel from "../../components/ApiCallPanel.astro";
+
+import RateLimitNotice from "../../components/RateLimitNotice.astro";
+---
+
+<ToolLayout
+  title="Random Color"
+  heading="Random Color"
+  description="Generate random colors in hex, rgb, or hsl format."
+>
+  <!-- Controls -->
+  <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-center mb-8">
+    <div>
+      <label for="color-format" class="block text-sm font-medium mb-1">Format</label>
+      <select
+        id="color-format"
+        class="rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      >
+        <option value="hex" selected>hex</option>
+        <option value="rgb">rgb</option>
+        <option value="hsl">hsl</option>
+      </select>
+    </div>
+    <div>
+      <label for="color-count" class="block text-sm font-medium mb-1">Count</label>
+      <input
+        type="number"
+        id="color-count"
+        min="1"
+        max="100"
+        value="1"
+        class="w-24 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </div>
+    <GenerateButton label="Generate" loadingLabel="Generating..." />
+  </div>
+
+  <!-- Result -->
+  <div
+    id="color-result-container"
+    class="hidden rounded-lg border border-border dark:border-border-dark bg-surface-alt dark:bg-surface-alt-dark p-6"
+  >
+    <div id="color-result" class="flex flex-col gap-2"></div>
+  </div>
+
+  <!-- Error -->
+  <div
+    id="color-error"
+    role="alert" class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
+  >
+  </div>
+
+  <!-- Rate Limit Notice -->
+  <RateLimitNotice />
+
+  <!-- API Call Panel -->
+  <ApiCallPanel />
+</ToolLayout>
+
+<script>
+  import { initToolRunner } from "../../scripts/toolRunner";
+  import { createInlineCopyButton } from "../../scripts/copyButton";
+
+  const formatSelect = document.getElementById("color-format") as HTMLSelectElement;
+  const countInput = document.getElementById("color-count") as HTMLInputElement;
+  const resultEl = document.getElementById("color-result")!;
+
+  initToolRunner({
+    resultContainerId: "color-result-container",
+    errorElId: "color-error",
+    buildPath() {
+      const format = formatSelect.value;
+      const count = Math.max(1, Math.min(100, parseInt(countInput.value, 10) || 1));
+      countInput.value = String(count);
+
+      const params = new URLSearchParams();
+      params.set("format", format);
+      params.set("count", String(count));
+
+      return `/api/v1/color?${params.toString()}`;
+    },
+    renderResults(json) {
+      const data = json as { result?: string; results?: string[] };
+      const count = parseInt(countInput.value, 10) || 1;
+      const format = formatSelect.value;
+      const values: string[] = count === 1 ? [data.result ?? ""] : (data.results ?? []);
+
+      resultEl.innerHTML = "";
+      values.forEach((color) => {
+        const row = document.createElement("div");
+        row.className = "flex items-center gap-3";
+
+        if (format !== "hsl") {
+          const swatch = document.createElement("div");
+          swatch.className =
+            "w-8 h-8 rounded border border-border dark:border-border-dark flex-shrink-0";
+          swatch.style.backgroundColor = color;
+          row.appendChild(swatch);
+        }
+
+        const text = document.createElement("span");
+        text.className = "font-mono text-sm flex-1";
+        text.textContent = color;
+        row.appendChild(text);
+
+        row.appendChild(createInlineCopyButton(color));
+        resultEl.appendChild(row);
+      });
+    },
+  });
+</script>

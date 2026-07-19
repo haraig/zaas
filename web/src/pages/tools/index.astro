@@ -1,0 +1,102 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const tools = [
+  {
+    title: "Dice Roller",
+    description: "Roll standard RPG dice - d4, d6, d8, d10, d12, d20, or d100.",
+    href: "/tools/dice",
+    icon: "🎲",
+  },
+  {
+    title: "UUID Generator",
+    description: "Generate version 4 UUIDs in standard, no-dashes, or URN format.",
+    href: "/tools/uuid",
+    icon: "🆔",
+  },
+  {
+    title: "Random Color",
+    description: "Generate random colors in hex, rgb, or hsl format.",
+    href: "/tools/color",
+    icon: "🎨",
+  },
+  {
+    title: "Random Coordinates",
+    description: "Generate random geographic coordinates, optionally restricted to land areas.",
+    href: "/tools/coordinates",
+    icon: "🌍",
+  },
+  {
+    title: "Password Generator",
+    description: "Generate secure random passwords with configurable character sets.",
+    href: "/tools/password",
+    icon: "🔐",
+  },
+  {
+    title: "Random Words",
+    description: "Generate random words - general vocabulary, Docker-style, or Ubuntu-style.",
+    href: "/tools/words",
+    icon: "📝",
+  },
+  {
+    title: "Lorem Ipsum",
+    description: "Generate lorem ipsum placeholder text by sentence or paragraph.",
+    href: "/tools/lorem",
+    icon: "📄",
+  },
+  {
+    title: "SSH Key Generator",
+    description: "Generate ed25519 or RSA SSH keypairs ready to use.",
+    href: "/tools/ssh-key",
+    icon: "🔑",
+  },
+];
+---
+
+<BaseLayout
+  title="Tools - ZaaS"
+  description="Free online randomness tools powered by the ZaaS API."
+>
+  <section class="py-12 sm:py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">Tools</h1>
+        <p class="mt-3 text-text-secondary dark:text-text-secondary-dark max-w-xl mx-auto">
+          Interactive tools powered by the ZaaS API. No signup, no API key - just click and go.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        {
+          tools.map((tool) => (
+            <a
+              href={tool.href}
+              class="group rounded-xl border border-border dark:border-border-dark p-6 hover:border-accent/50 transition-colors block"
+            >
+              <div class="text-3xl mb-3">{tool.icon}</div>
+              <h2 class="text-lg font-semibold mb-2 group-hover:text-accent transition-colors">
+                {tool.title}
+              </h2>
+              <p class="text-sm text-text-secondary dark:text-text-secondary-dark">
+                {tool.description}
+              </p>
+            </a>
+          ))
+        }
+      </div>
+      <div class="mt-10 text-center rounded-lg border border-border dark:border-border-dark bg-surface-alt dark:bg-surface-alt-dark p-6">
+        <p class="text-sm text-text-secondary dark:text-text-secondary-dark">
+          Looking for more? The API offers additional endpoints like
+          <code class="text-xs font-mono text-accent">coin flip</code> and
+          <code class="text-xs font-mono text-accent">random numbers</code>
+          that don't have interactive tools yet.
+        </p>
+        <a
+          href="/docs"
+          class="mt-3 inline-flex items-center text-sm font-medium text-accent hover:underline"
+        >
+          Explore all endpoints in the API Docs &rarr;
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

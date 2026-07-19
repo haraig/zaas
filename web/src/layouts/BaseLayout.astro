@@ -1,0 +1,77 @@
+---
+import "../styles/global.css";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+  lang?: string;
+  alternates?: { hreflang: string; href: string }[];
+  ogImage?: string;
+  /**
+   * When true, the standard Header and Footer are omitted.
+   * Use this for pages (e.g. DocsLayout) that render their own chrome.
+   */
+  noHeaderFooter?: boolean;
+}
+
+const {
+  title,
+  description = "Randomness as a Service - roll dice, generate UUIDs, pick random colors, and more via a simple REST API.",
+  lang = "en",
+  alternates = [],
+  ogImage = "/og-default.png",
+  noHeaderFooter = false,
+} = Astro.props;
+
+const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || "https://zaas.at";
+const siteBase = "https://zaas.at";
+const canonicalUrl = new URL(Astro.url.pathname, siteBase).href;
+const ogImageAbsolute = ogImage.startsWith("http") ? ogImage : new URL(ogImage, siteBase).href;
+---
+
+<html lang={lang} data-api-base-url={apiBaseUrl}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonicalUrl} />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImageAbsolute} />
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageAbsolute} />
+    {alternates.map((alt) => <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />)}
+    <title>{title}</title>
+    <!-- Synchronous theme-detection script prevents dark-mode FOUC.
+         Served as a static asset to avoid needing 'unsafe-inline' in CSP. -->
+    <script is:inline src="/theme-init.js"></script>
+  </head>
+  <body
+    class="min-h-screen flex flex-col bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark transition-colors duration-200"
+  >
+    {!noHeaderFooter && (
+      <a
+        href="#main-content"
+        class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-white focus:font-medium"
+      >Skip to main content</a>
+    )}
+    {!noHeaderFooter && <Header />}
+    {noHeaderFooter ? (
+      <slot />
+    ) : (
+      <main id="main-content" tabindex="-1" class="flex-1">
+        <slot />
+      </main>
+    )}
+    {!noHeaderFooter && <Footer />}
+  </body>
+</html>

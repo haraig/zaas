@@ -1,0 +1,35 @@
+---
+import ThemeToggle from "./ThemeToggle.astro";
+---
+
+<header class="border-b border-border dark:border-border-dark">
+  <nav class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <a
+      href="/"
+      class="flex items-center gap-2 font-bold text-lg hover:text-accent transition-colors"
+    >
+      <svg aria-hidden="true" class="w-7 h-7 text-accent" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="6" fill="currentColor"></rect>
+        <circle cx="16" cy="16" r="3" fill="white"></circle>
+        <circle cx="8" cy="8" r="2.5" fill="white"></circle>
+        <circle cx="24" cy="24" r="2.5" fill="white"></circle>
+      </svg>
+      ZaaS
+    </a>
+    <div class="flex items-center gap-6">
+      <a
+        href="/docs"
+        class="text-sm font-medium text-text-secondary dark:text-text-secondary-dark hover:text-accent transition-colors"
+      >
+        API Docs
+      </a>
+      <a
+        href="/tools"
+        class="text-sm font-medium text-text-secondary dark:text-text-secondary-dark hover:text-accent transition-colors"
+      >
+        Tools
+      </a>
+      <ThemeToggle />
+    </div>
+  </nav>
+</header>

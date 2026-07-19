@@ -1,0 +1,175 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || "https://zaas.at";
+
+const features = [
+  {
+    title: "UUID Generator",
+    description: "Version 4 UUIDs in standard, no-dashes, or URN format. Up to 100 per request.",
+    endpoint: "/api/v1/uuid",
+    icon: "🆔",
+    toolHref: "/tools/uuid",
+  },
+  {
+    title: "Random Colors",
+    description: "Colors in hex, RGB, or HSL format. Great for design tools and prototyping.",
+    endpoint: "/api/v1/color",
+    icon: "🎨",
+    toolHref: "/tools/color",
+  },
+  {
+    title: "Password Generator",
+    description: "Secure random passwords with configurable character sets. Up to 100 at once.",
+    endpoint: "/api/v1/password",
+    icon: "🔐",
+    toolHref: "/tools/password",
+  },
+  {
+    title: "Random Words",
+    description: "General vocabulary, Docker-style adjective_name, or Ubuntu-style Adjective Animal.",
+    endpoint: "/api/v1/words",
+    icon: "📝",
+    toolHref: "/tools/words",
+  },
+  {
+    title: "Lorem Ipsum",
+    description: "Placeholder text by sentence or paragraph. First result always starts with the classic opener.",
+    endpoint: "/api/v1/lorem",
+    icon: "📄",
+    toolHref: "/tools/lorem",
+  },
+  {
+    title: "SSH Key Generator",
+    description: "Generate ed25519 or RSA SSH keypairs with public key, private key, and fingerprint.",
+    endpoint: "/api/v1/ssh-key",
+    icon: "🔑",
+    toolHref: "/tools/ssh-key",
+  },
+];
+---
+
+<BaseLayout
+  title="ZaaS - Zufall as a Service"
+  description="Free randomness-as-a-service API. Roll dice, generate UUIDs, pick random colors, generate passwords, SSH keys, and more. No signup required."
+>
+  <!-- Hero Section -->
+  <section class="py-16 sm:py-24">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight">
+        Randomness as a
+        <span class="text-accent">Service</span>
+      </h1>
+      <p
+        class="mt-6 text-lg sm:text-xl text-text-secondary dark:text-text-secondary-dark max-w-2xl mx-auto"
+      >
+        Roll dice, generate UUIDs, pick random colors, and more - via a simple, free REST API. No
+        signup required.
+      </p>
+      <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="/docs"
+          class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-accent text-white font-medium hover:bg-accent-hover transition-colors"
+        >
+          Explore the API
+        </a>
+        <a
+          href="/tools"
+          class="inline-flex items-center justify-center px-6 py-3 rounded-lg border border-border dark:border-border-dark font-medium hover:bg-surface-alt dark:hover:bg-surface-alt-dark transition-colors"
+        >
+          Try the Tools
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Code Example Section -->
+  <section class="py-12 bg-surface-alt dark:bg-surface-alt-dark">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="max-w-2xl mx-auto">
+        <h2
+          class="text-sm font-semibold uppercase tracking-wide text-text-secondary dark:text-text-secondary-dark mb-4"
+        >
+          Simple as a GET request
+        </h2>
+        <div class="rounded-lg bg-surface-dark dark:bg-[#020617] p-4 sm:p-6 overflow-x-auto">
+          <pre
+            class="text-sm text-slate-300 font-mono"><code><span class="text-slate-500">$</span> curl {apiBaseUrl}/api/v1/dice?sides=20&amp;count=3
+
+<span class="text-slate-500">&lbrace;"results":</span> <span class="text-emerald-400">[14, 7, 19]</span><span class="text-slate-500">,</span>
+ <span class="text-slate-500">"meta":</span> <span class="text-slate-500">&lbrace;"endpoint": "/api/v1/dice",</span>
+         <span class="text-slate-500">"timestamp": "2026-04-13T10:00:00Z",</span>
+         <span class="text-slate-500">"params": &lbrace;"sides": 20, "count": 3&rbrace;&rbrace;&rbrace;</span></code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section class="py-16 sm:py-24">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-2xl sm:text-3xl font-bold text-center mb-4">What can you randomize?</h2>
+      <p class="text-center text-text-secondary dark:text-text-secondary-dark mb-12 max-w-xl mx-auto">
+        A few of our favorite endpoints. <a href="/docs" class="text-accent hover:underline">See the full API</a> for everything.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {
+          features.map((feature) => (
+            <div class="rounded-xl border border-border dark:border-border-dark p-6 hover:border-accent/50 transition-colors">
+              <div class="text-3xl mb-3">{feature.icon}</div>
+              <h3 class="text-lg font-semibold mb-2">{feature.title}</h3>
+              <p class="text-sm text-text-secondary dark:text-text-secondary-dark">
+                {feature.description}
+              </p>
+              {feature.toolHref && (
+                <div class="mt-3">
+                  <a
+                    href={feature.toolHref}
+                    class="text-xs font-medium text-accent hover:underline"
+                  >
+                    Try it &rarr;
+                  </a>
+                </div>
+              )}
+            </div>
+          ))
+        }
+      </div>
+      <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/tools" class="text-sm font-medium text-accent hover:underline">
+          Try our interactive tools &rarr;
+        </a>
+        <a href="/docs" class="text-sm font-medium text-text-secondary dark:text-text-secondary-dark hover:underline">
+          View all API endpoints &rarr;
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-16 bg-surface-alt dark:bg-surface-alt-dark">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-2xl sm:text-3xl font-bold mb-4">Ready to get started?</h2>
+      <p class="text-text-secondary dark:text-text-secondary-dark mb-8 max-w-xl mx-auto">
+        No API key needed for 60 requests per minute. Just send a GET request and get random data
+        back.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="/docs"
+          class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-accent text-white font-medium hover:bg-accent-hover transition-colors"
+        >
+          Read the Docs
+        </a>
+        <a
+          href="https://github.com/haraig/zaas"
+          class="inline-flex items-center justify-center px-6 py-3 rounded-lg border border-border dark:border-border-dark font-medium hover:bg-surface dark:hover:bg-surface-dark transition-colors"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          View on GitHub
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

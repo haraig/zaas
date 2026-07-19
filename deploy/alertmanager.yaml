@@ -1,0 +1,57 @@
+# Alertmanager configuration for ZaaS.
+# Alerts arrive from Prometheus (see prometheus.yaml alerting block).
+#
+# Configure the receiver to match your notification channel.
+# The default receiver below logs to the Alertmanager UI only.
+# Replace or extend the receivers list with email, PagerDuty, Slack, etc.
+#
+# See https://prometheus.io/docs/alerting/latest/configuration/ for full reference.
+
+global:
+  # How long to wait before re-sending a resolved alert.
+  resolve_timeout: 5m
+
+  # SMTP defaults - override via environment variables or replace with your provider.
+  # smtp_smarthost: 'smtp.migadu.com:587'
+  # smtp_from: 'alerts@zaas.at'
+  # smtp_auth_username: 'noreply@zaas.at'
+  # smtp_auth_password: '<ZAAS_SMTP_PASSWORD>'
+  # smtp_require_tls: true
+
+route:
+  # Default receiver used when no sub-route matches.
+  receiver: "default"
+  # Group alerts by alertname so related alerts fire as one notification.
+  group_by: ["alertname", "job"]
+  # Wait for related alerts to arrive before sending the first notification.
+  group_wait: 30s
+  # Wait before re-sending an ongoing alert group.
+  group_interval: 5m
+  # Wait before re-sending an already-fired alert.
+  repeat_interval: 4h
+
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: "default"
+      repeat_interval: 1h
+
+receivers:
+  - name: "default"
+    # Replace with a real notifier (email_configs, slack_configs, pagerduty_configs, etc.)
+    # Until configured, critical alerts are visible only in the Alertmanager UI at :9093.
+    #
+    # Example email receiver (uncomment and fill in):
+    # email_configs:
+    #   - to: 'ops@zaas.at'
+    #     send_resolved: true
+    #     headers:
+    #       Subject: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+
+inhibit_rules:
+  # If the API is completely down, suppress lower-severity API alerts.
+  - source_matchers:
+      - alertname="ZaasApiDown"
+    target_matchers:
+      - job="zaas-api"
+    equal: ["job"]

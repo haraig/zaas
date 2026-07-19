@@ -1,0 +1,24 @@
+---
+interface Props {
+  label?: string;
+  loadingLabel?: string;
+}
+
+const { label = "Generate", loadingLabel = "Generating..." } = Astro.props;
+---
+
+<button
+  type="button"
+  data-generate-btn
+  data-label={label}
+  data-loading-label={loadingLabel}
+  class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-accent text-white font-medium hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[160px]"
+>
+  <svg aria-hidden="true" data-generate-spinner class="hidden animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+    ></circle>
+    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+    ></path>
+  </svg>
+  <span data-generate-text>{label}</span>
+</button>

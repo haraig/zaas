@@ -1,0 +1,166 @@
+# Prometheus alerting rules for ZaaS.
+# Loaded by prometheus.yaml via rule_files.
+# Every rule carries severity and runbook_url labels.
+# runbook_url points at the corresponding playbook section in docs/reference/runbook.md
+# (served at https://zaas.at/docs or via the repo).
+
+groups:
+  - name: zaas.api
+    rules:
+      # ── API availability ───────────────────────────────────────────────────
+
+      - alert: ZaasApiDown
+        expr: up{job="zaas-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-api-down
+        annotations:
+          summary: "ZaaS API is down"
+          description: "The zaas-api scrape target has been unreachable for more than 2 minutes."
+
+      # ── Error rate ─────────────────────────────────────────────────────────
+
+      - alert: ZaasHighErrorRate
+        expr: >
+          sum(rate(http_server_request_duration_seconds_count{job="zaas-api",http_response_status_code=~"5.."}[5m]))
+          /
+          sum(rate(http_server_request_duration_seconds_count{job="zaas-api"}[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-high-error-rate
+        annotations:
+          summary: "ZaaS API 5xx error rate above 5%"
+          description: "5xx responses account for {{ $value | humanizePercentage }} of traffic over the last 5 minutes."
+
+      # ── Latency ────────────────────────────────────────────────────────────
+
+      - alert: ZaasHighP99Latency
+        expr: >
+          histogram_quantile(0.99,
+            sum(rate(http_server_request_duration_seconds_bucket{job="zaas-api"}[5m])) by (le)
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-high-p99-latency
+        annotations:
+          summary: "ZaaS API p99 latency above 1 second"
+          description: "99th-percentile response time is {{ $value | humanizeDuration }} over the last 5 minutes."
+
+      # ── Rate limiting ──────────────────────────────────────────────────────
+
+      - alert: ZaasHighRateLimitRate
+        expr: >
+          sum(rate(http_server_request_duration_seconds_count{job="zaas-api",http_response_status_code="429"}[5m]))
+          > 10
+        for: 5m
+        labels:
+          severity: warning
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-high-rate-limit-rate
+        annotations:
+          summary: "ZaaS API rate-limit rejections above 10/s"
+          description: "The API is returning 429 Too Many Requests at {{ $value | humanize }} req/s - possible abuse or misconfiguration."
+
+  - name: zaas.infrastructure
+    rules:
+      # ── Disk space ────────────────────────────────────────────────────────
+
+      - alert: ZaasDiskSpaceLow
+        expr: >
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint="/"}
+          / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint="/"})
+          < 0.10
+        for: 5m
+        labels:
+          severity: warning
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-disk-space-low
+        annotations:
+          summary: "Disk space below 10% on {{ $labels.instance }}"
+          description: "Available disk is {{ $value | humanizePercentage }} on mountpoint {{ $labels.mountpoint }}."
+
+      - alert: ZaasDiskSpaceCritical
+        expr: >
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint="/"}
+          / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint="/"})
+          < 0.05
+        for: 2m
+        labels:
+          severity: critical
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-disk-space-low
+        annotations:
+          summary: "Disk space critically low (< 5%) on {{ $labels.instance }}"
+          description: "Available disk is {{ $value | humanizePercentage }} on mountpoint {{ $labels.mountpoint }}. Immediate action required."
+
+      # ── PostgreSQL ─────────────────────────────────────────────────────────
+
+      - alert: ZaasPostgresDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-postgres-down
+        annotations:
+          summary: "ZaaS PostgreSQL exporter is down"
+          description: "The postgres-exporter scrape target has been unreachable for more than 2 minutes. PostgreSQL may be down."
+
+      # ── Redis ─────────────────────────────────────────────────────────────
+
+      - alert: ZaasRedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-redis-down
+        annotations:
+          summary: "ZaaS Redis exporter is down"
+          description: "The redis-exporter scrape target has been unreachable for more than 2 minutes. Redis may be down."
+
+  - name: zaas.collector
+    rules:
+      # ── OTel Collector data loss ───────────────────────────────────────────
+
+      - alert: ZaasCollectorDroppedSpans
+        expr: >
+          rate(otelcol_exporter_send_failed_spans_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-collector-dropped-data
+        annotations:
+          summary: "OTel Collector is dropping spans"
+          description: "The Collector is failing to export {{ $value | humanize }} spans/s. Check Tempo connectivity and Collector logs."
+
+      - alert: ZaasCollectorDroppedMetrics
+        expr: >
+          rate(otelcol_exporter_send_failed_metric_points_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-collector-dropped-data
+        annotations:
+          summary: "OTel Collector is dropping metric points"
+          description: "The Collector is failing to export {{ $value | humanize }} metric points/s. Check Prometheus remote-write connectivity."
+
+      - alert: ZaasCollectorDroppedLogs
+        expr: >
+          rate(otelcol_exporter_send_failed_log_records_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-collector-dropped-data
+        annotations:
+          summary: "OTel Collector is dropping log records"
+          description: "The Collector is failing to export {{ $value | humanize }} log records/s. Check Loki connectivity."
+
+      - alert: ZaasCollectorDown
+        expr: up{job="otel-collector"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-collector-dropped-data
+        annotations:
+          summary: "OTel Collector is down"
+          description: "The otel-collector scrape target has been unreachable for 2 minutes. All telemetry is being lost."

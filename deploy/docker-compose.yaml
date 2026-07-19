@@ -1,0 +1,235 @@
+# Full stack: API + Caddy + OTel observability backends.
+# Production-equivalent. Caddy handles TLS in production (needs ZAAS_DOMAIN set).
+# For local dev, use with docker-compose.local.yml overlay.
+#
+# Usage (production):
+#   docker compose -f deploy/docker-compose.yml up -d
+#
+# Usage (local dev via Makefile):
+#   make dev
+#   (runs: docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.local.yml up)
+
+services:
+  # ── Application ────────────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    image: zaas-api:local
+    restart: unless-stopped
+    environment:
+      ZAAS_PORT: "8080"
+      ZAAS_BASE_URL: "${ZAAS_BASE_URL:-http://localhost}"
+      ZAAS_LOG_LEVEL: "${ZAAS_LOG_LEVEL:-info}"
+      ZAAS_LOG_FORMAT: "${ZAAS_LOG_FORMAT:-json}"
+      ZAAS_CORS_ORIGINS: "${ZAAS_CORS_ORIGINS:-*}"
+      ZAAS_RATE_LIMIT_RPM: "${ZAAS_RATE_LIMIT_RPM:-60}"
+      ZAAS_RATE_LIMIT_BURST: "${ZAAS_RATE_LIMIT_BURST:-10}"
+      ZAAS_OTEL_ENABLED: "${ZAAS_OTEL_ENABLED:-true}"
+      ZAAS_METRICS_ENDPOINT_ENABLED: "${ZAAS_METRICS_ENDPOINT_ENABLED:-true}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: "zaas-api"
+      ZAAS_DB_URL: "${ZAAS_DB_URL:-postgres://zaas:zaas@postgres:5432/zaas?sslmode=disable}"
+      ZAAS_RATE_LIMIT_BACKEND: "${ZAAS_RATE_LIMIT_BACKEND:-memory}"
+      ZAAS_REDIS_URL: "${ZAAS_REDIS_URL:-redis://redis:6379}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  caddy:
+    # In production, set ZAAS_WEB_IMAGE to the immutable digest output by the deploy workflow
+    # (e.g. ghcr.io/haraig/zaas/web@sha256:<digest>). The :latest fallback is for local dev only.
+    image: ${ZAAS_WEB_IMAGE:-ghcr.io/haraig/zaas/web:latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      ZAAS_DOMAIN: "${ZAAS_DOMAIN:-zaas.at}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_SERVICE_NAME: "caddy"
+    depends_on:
+      - api
+      - grafana
+      - otel-collector
+
+  webhook:
+    image: almir/webhook:2.8.2@sha256:051d3a83075743b19c13e8da93b390eaca5505f278e2ca5ffdec162f2cf5121d
+    restart: unless-stopped
+    environment:
+      DEPLOY_WEBHOOK_SECRET: "${DEPLOY_WEBHOOK_SECRET}"
+    volumes:
+      - ./webhook/hooks.json:/etc/webhook/hooks.json:ro
+      - ./webhook/redeploy.sh:/scripts/redeploy.sh:ro
+      - /opt/zaas:/opt/zaas
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["-hooks=/etc/webhook/hooks.json", "-verbose", "-port=9000"]
+    depends_on:
+      - caddy
+
+  postgres:
+    image: postgres:16-alpine@sha256:79950da386bda7fcc9d57aa9aa9be6c6d7407596a9b8f68014b09a778a9ab316
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zaas
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set. Generate one with: openssl rand -base64 24}"
+      POSTGRES_DB: zaas
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zaas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.19.1@sha256:a0c79a8210d1079760ebeb3fa5c07659bc3ceb9ccc8bb921ba1073ef6fd4164f
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://zaas:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set. Generate one with: openssl rand -base64 24}@postgres:5432/zaas?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine@sha256:b1addbe72465a718643cff9e60a58e6df1841e29d6d7d60c9a85d8d72f08d1a7
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.84.0@sha256:4b5e213edb4fb7d1d02d38401a982ece07461bf0b5669a5c2b433937aeb86ede
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── OTel Observability Stack ───────────────────────────────────────────────
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.152.1@sha256:c68d838080b5d108ed1203716783465511f3a86ae2b039342ac578d2b4e82979
+    restart: unless-stopped
+    # Needs root (UID 0) to read /var/lib/docker/containers (owned by root, mode 700).
+    user: "0"
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    # Ports 4317/4318 are NOT published in production.
+    # Use docker-compose.local.yaml override to expose them for local OTLP testing.
+    depends_on:
+      - tempo
+      - prometheus
+      - loki
+
+  tempo:
+    image: grafana/tempo:2.10.5@sha256:7be8586c0f25398428bb63c07db0a88283f073aa44c5f4a3be21e97fe83de502
+    restart: unless-stopped
+    volumes:
+      - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200" # Tempo HTTP API
+      - "9095:9095" # Tempo gRPC (used by Grafana Drilldown)
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+
+  prometheus:
+    image: prom/prometheus:v3.11.3@sha256:387d460e3b15ec55d2837fc9275388a4730dbc8c0287926d3f662c5298ce7385
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus.rules.yaml:/etc/prometheus/prometheus.rules.yaml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-remote-write-receiver"
+
+  grafana:
+    image: grafana/grafana:13.0.1@sha256:3625fdfa3cab904abdf9faaff8f40de0639b456ac5c5d322964fe705051d5455
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    environment:
+      # Anonymous access disabled in production.
+      # Use GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD env vars (set in .env).
+      # docker-compose.local.yml overrides these for local dev (re-enables anonymous access).
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"
+      GF_SECURITY_ALLOW_EMBEDDING: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/etc/grafana/provisioning/dashboards/zaas-overview.json"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+
+  loki:
+    image: grafana/loki:3.7.2@sha256:800ec439ed2692b79c5a1fe17a6d2955f8999ad5d05f0276c6e4a10ac11cc491
+    restart: unless-stopped
+    volumes:
+      - ./loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1@sha256:27c475db5fb156cab31d5c18a4251ac7ed567746a2483ff264516437a39b15ba
+    restart: unless-stopped
+    volumes:
+      - ./alertmanager.yaml:/etc/alertmanager/alertmanager.yaml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yaml"
+      - "--storage.path=/alertmanager"
+    depends_on:
+      - prometheus
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  redis_data:
+  tempo_data:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+  alertmanager_data:

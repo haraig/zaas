@@ -1,0 +1,44 @@
+---
+// The Scalar API playground renders its own full UI. DocsLayout provides the
+// shared <head> (theme init, meta, favicon) plus a slim breadcrumb bar while
+// omitting the standard Header and Footer.
+import DocsLayout from "../layouts/DocsLayout.astro";
+
+const isDev = import.meta.env.DEV;
+---
+
+<DocsLayout
+  title="API Documentation"
+  description="Interactive API documentation for ZaaS - Zufall as a Service."
+>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    #app {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+  </style>
+  <div id="app" data-is-dev={isDev ? "true" : "false"}></div>
+  <script>
+    import "@scalar/api-reference/style.css";
+    import { createApiReference } from "@scalar/api-reference";
+
+    const isDark = document.documentElement.classList.contains("dark");
+    const app = document.getElementById("app")!;
+    const isDev = app.dataset.isDev === "true";
+
+    createApiReference("#app", {
+      url: "/api/v1/openapi.yaml",
+      forceDarkModeState: isDark ? "dark" : "light",
+      servers: isDev
+        ? [{ url: "http://localhost/api/v1", description: "Local development" }]
+        : undefined,
+    });
+  </script>
+</DocsLayout>
