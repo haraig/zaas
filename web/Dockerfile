@@ -27,5 +27,5 @@ COPY --chown=app:app . .
 RUN ASTRO_TELEMETRY_DISABLED=1 npm run build
 
 # --- Runtime stage: Caddy with static assets ---
-FROM caddy:2.11.3-alpine@sha256:3739ea4f0c877259a693d932693cf8f3408e9a9497c004f031b0e830e93e1546
+FROM caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
 COPY --from=builder /app/dist /srv/web
