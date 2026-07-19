@@ -3,6 +3,6 @@
   "type": "module",
   "devDependencies": {
     "@commitlint/cli": "^21.0.1",
-    "@commitlint/config-conventional": "^21.0.1"
+    "@commitlint/config-conventional": "^21.2.0"
   }
 }
