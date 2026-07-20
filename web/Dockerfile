@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # --- Build stage: Astro static site ---
-FROM node:22-alpine@sha256:757ec364de4d37cedf30871be2988927660834e656e9aa52aad9ac194814c30c AS builder
+FROM node:26-alpine@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66 AS builder
 WORKDIR /app
 
 # Build-time env vars injected by CI (used by Astro's import.meta.env.PUBLIC_*)
@@ -27,5 +27,5 @@ COPY --chown=app:app . .
 RUN ASTRO_TELEMETRY_DISABLED=1 npm run build
 
 # --- Runtime stage: Caddy with static assets ---
-FROM caddy:2.11.3-alpine@sha256:3739ea4f0c877259a693d932693cf8f3408e9a9497c004f031b0e830e93e1546
+FROM caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
 COPY --from=builder /app/dist /srv/web
