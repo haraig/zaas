@@ -20,7 +20,7 @@
     "astro": "^7.1.1",
     "leaflet": "^1.9.4",
     "tailwindcss": "^4.3.3",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "devDependencies": {
     "prettier": "^3.9.5",
