@@ -52,7 +52,6 @@ Task-oriented instructions for specific goals.
 | [how-to/run-locally.md](how-to/run-locally.md) | Run the API and full stack locally for development |
 | [how-to/deploy.md](how-to/deploy.md) | First-time server bootstrap and automated deploy setup |
 | [how-to/infrastructure.md](how-to/infrastructure.md) | Provision Hetzner Cloud server and DNS with OpenTofu |
-| [how-to/github-setup.md](how-to/github-setup.md) | Create and configure the GitHub organization and repository: settings, labels, issue/PR workflow, AI code review |
 
 ### Reference
 

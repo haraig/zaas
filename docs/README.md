@@ -15,7 +15,6 @@ Task-oriented instructions for specific goals.
 - [Run locally](how-to/run-locally.md) - start the API and full stack on your machine
 - [Deploy](how-to/deploy.md) - server bootstrap and automated deploy setup
 - [Infrastructure](how-to/infrastructure.md) - provision Hetzner Cloud with OpenTofu
-- [GitHub setup](how-to/github-setup.md) - repository and CI configuration
 
 ## Reference
 

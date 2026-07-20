@@ -97,8 +97,7 @@ zaas/
 │   ├── how-to/
 │   │   ├── run-locally.md      # Run the API and full stack locally
 │   │   ├── deploy.md           # Server bootstrap and automated deploy setup
-│   │   ├── infrastructure.md  # Provision Hetzner Cloud with OpenTofu
-│   │   └── github-setup.md    # GitHub organization and repository setup
+│   │   └── infrastructure.md   # Provision Hetzner Cloud with OpenTofu
 │   ├── reference/
 │   │   ├── openapi.yaml        # OpenAPI 3.0.3 spec (source of truth)
 │   │   ├── architecture.md     # Package layout, code generation, rate limiting, auth, DB
