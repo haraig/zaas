@@ -34,16 +34,16 @@ func Auth(clients store.ClientStore) func(http.Handler) http.Handler {
 
 			// Accept "Bearer" scheme in any case (e.g. "bearer", "BEARER").
 			if !strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-				writeProblem(r, w, http.StatusUnauthorized, "INVALID_API_KEY",
-					"Invalid or revoked API key. Visit https://zaas.at to register or re-issue a key.")
+				writeProblem(r, w, "INVALID_API_KEY",
+					"Invalid or revoked API key. Email contact@zaas.at to request a reissue.")
 				return
 			}
 			key := authHeader[len("bearer "):]
 
 			// If clients store is nil (no DB configured), reject all keys
 			if clients == nil {
-				writeProblem(r, w, http.StatusUnauthorized, "INVALID_API_KEY",
-					"Invalid or revoked API key. Visit https://zaas.at to register or re-issue a key.")
+				writeProblem(r, w, "INVALID_API_KEY",
+					"Invalid or revoked API key. Email contact@zaas.at to request a reissue.")
 				return
 			}
 
@@ -51,8 +51,8 @@ func Auth(clients store.ClientStore) func(http.Handler) http.Handler {
 
 			client, err := clients.GetClientByAPIKeyHash(r.Context(), hash)
 			if err != nil || client == nil || client.RevokedAt != nil || client.VerifiedAt == nil {
-				writeProblem(r, w, http.StatusUnauthorized, "INVALID_API_KEY",
-					"Invalid or revoked API key. Visit https://zaas.at to register or re-issue a key.")
+				writeProblem(r, w, "INVALID_API_KEY",
+					"Invalid or revoked API key. Email contact@zaas.at to request a reissue.")
 				return
 			}
 
@@ -77,14 +77,15 @@ func sha256sum(s string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// writeProblem emits an RFC 9457 application/problem+json response from middleware.
-func writeProblem(r *http.Request, w http.ResponseWriter, status int, code, detail string) {
+// writeProblem emits an RFC 9457 application/problem+json 401 Unauthorized response from middleware.
+func writeProblem(r *http.Request, w http.ResponseWriter, code, detail string) {
 	slugs := map[string]string{
 		"RATE_LIMITED":        "rate-limited",
 		"INVALID_PARAM":       "invalid-param",
 		"INTERNAL_ERROR":      "internal-error",
 		"INVALID_API_KEY":     "invalid-api-key",
 		"SERVICE_UNAVAILABLE": "service-unavailable",
+		"INVALID_ADMIN_TOKEN": "invalid-admin-token",
 	}
 	titles := map[string]string{
 		"RATE_LIMITED":        "Too Many Requests",
@@ -92,6 +93,7 @@ func writeProblem(r *http.Request, w http.ResponseWriter, status int, code, deta
 		"INTERNAL_ERROR":      "Internal Server Error",
 		"INVALID_API_KEY":     "Unauthorized",
 		"SERVICE_UNAVAILABLE": "Service Unavailable",
+		"INVALID_ADMIN_TOKEN": "Unauthorized",
 	}
 	slug := slugs[code]
 	if slug == "" {
@@ -107,14 +109,14 @@ func writeProblem(r *http.Request, w http.ResponseWriter, status int, code, deta
 	body := map[string]any{
 		"type":       fmt.Sprintf("https://zaas.at/errors/%s", slug),
 		"title":      title,
-		"status":     status,
+		"status":     http.StatusUnauthorized,
 		"detail":     detail,
 		"instance":   instance,
 		"code":       code,
 		"request_id": reqID,
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusUnauthorized)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		slog.ErrorContext(r.Context(), "writeProblem encode error", "error", err)
 	}

@@ -35,26 +35,33 @@ func NewRouter(cfg config.Config, rl ratelimiter.RateLimiter, promHandler http.H
 		r.Get("/metrics", MetricsHandler(promHandler))
 	}
 
-	// Auth endpoints - aggressive per-IP rate limiting, no API key required.
+	// Auth endpoints - aggressive per-IP rate limiting.
+	// /auth/verify stays public (completes an already-issued registration/reissue).
+	// /auth/register and /auth/reissue additionally require the X-Admin-Token
+	// header while self-service signup is disabled - see docs/explanation/design-decisions.md.
 	r.Group(func(r chi.Router) {
 		authRL := ratelimiter.NewMemoryRateLimiter(5)
-		r.Use(middleware.RateLimit(authRL, 5, cfg.BaseURL, true))
+		r.Use(middleware.RateLimit(authRL, 5, true))
 		authWrapper := &gen.ServerInterfaceWrapper{
 			Handler: srv,
 			ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 				WriteError(w, r, http.StatusBadRequest, "INVALID_PARAM", err.Error(), 0)
 			},
 		}
-		r.Post("/api/v1/auth/register", srv.AuthRegister)
 		r.Post("/api/v1/auth/verify", authWrapper.AuthVerify)
-		r.Post("/api/v1/auth/reissue", srv.AuthReissue)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.AdminAuth(cfg.AdminToken))
+			r.Post("/api/v1/auth/register", srv.AuthRegister)
+			r.Post("/api/v1/auth/reissue", srv.AuthReissue)
+		})
 	})
 
 	// Main API - auth middleware + standard rate limiting.
 	// We register only the randomness endpoints here (not auth routes) to avoid conflict.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(clientStore))
-		r.Use(middleware.RateLimit(rl, cfg.RateLimitRPM, cfg.BaseURL, false))
+		r.Use(middleware.RateLimit(rl, cfg.RateLimitRPM, false))
 		r.Route("/api/v1", func(r chi.Router) {
 			wrapper := &gen.ServerInterfaceWrapper{
 				Handler: srv,

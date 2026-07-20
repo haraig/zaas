@@ -62,7 +62,7 @@ func TestCORS_SpecificOrigin(t *testing.T) {
 func TestRateLimitMiddleware_SetsHeaders(t *testing.T) {
 	t.Parallel()
 	rl := ratelimiter.NewMemoryRateLimiter(60)
-	handler := applyMiddleware(middleware.RateLimit(rl, 60, "http://localhost:8080", false))
+	handler := applyMiddleware(middleware.RateLimit(rl, 60, false))
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/coin", nil)
 	req.RemoteAddr = "1.2.3.4:1234"
 	w := httptest.NewRecorder()
@@ -81,7 +81,7 @@ func TestRateLimitMiddleware_SetsHeaders(t *testing.T) {
 func TestRateLimitMiddleware_Blocks(t *testing.T) {
 	t.Parallel()
 	rl := ratelimiter.NewMemoryRateLimiter(1)
-	mw := middleware.RateLimit(rl, 1, "http://localhost:8080", false)
+	mw := middleware.RateLimit(rl, 1, false)
 
 	h := mw(http.HandlerFunc(okHandler))
 

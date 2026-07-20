@@ -48,6 +48,44 @@ func TestRouterRoutes(t *testing.T) {
 	}
 }
 
+func TestRouterAuthRoutes_AdminGating(t *testing.T) {
+	t.Parallel()
+	cfg := config.Config{
+		CORSOrigins:  "*",
+		RateLimitRPM: 60,
+		BaseURL:      "http://localhost:8080",
+		OTelEnabled:  false,
+		AdminToken:   "test-admin-token",
+	}
+	rl := ratelimiter.NewMemoryRateLimiter(cfg.RateLimitRPM)
+	router := newTestRouter(cfg, rl, nil)
+
+	gatedRoutes := []string{"/api/v1/auth/register", "/api/v1/auth/reissue"}
+	for _, path := range gatedRoutes {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, path, nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("%s without X-Admin-Token: got %d, want 401", path, w.Code)
+		}
+
+		req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, path, nil)
+		req.Header.Set("X-Admin-Token", "test-admin-token")
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code == http.StatusNotFound || w.Code == http.StatusUnauthorized {
+			t.Errorf("%s with valid X-Admin-Token: got %d, want to reach the handler", path, w.Code)
+		}
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/verify", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code == http.StatusUnauthorized || w.Code == http.StatusNotFound {
+		t.Errorf("/auth/verify without X-Admin-Token: got %d, want to reach the handler (public route)", w.Code)
+	}
+}
+
 func TestRouterMetricsRoute_EnabledWithHandler(t *testing.T) {
 	t.Parallel()
 	cfg := config.Config{

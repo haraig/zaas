@@ -39,7 +39,7 @@ func (m *mockRateLimiter) Close() error { return nil }
 func TestRateLimit_Anonymous_UsesAllow(t *testing.T) {
 	t.Parallel()
 	rl := &mockRateLimiter{result: ratelimiter.Result{Allowed: true, Remaining: 59, ResetAt: time.Now().Add(time.Minute)}}
-	mw := RateLimit(rl, 60, "http://localhost", false)
+	mw := RateLimit(rl, 60, false)
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -60,7 +60,7 @@ func TestRateLimit_Anonymous_UsesAllow(t *testing.T) {
 func TestRateLimit_Authenticated_UsesAllowN(t *testing.T) {
 	t.Parallel()
 	rl := &mockRateLimiter{result: ratelimiter.Result{Allowed: true, Remaining: 599, ResetAt: time.Now().Add(time.Minute)}}
-	mw := RateLimit(rl, 60, "http://localhost", false)
+	mw := RateLimit(rl, 60, false)
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -86,7 +86,7 @@ func TestRateLimit_FailOpen_OnError(t *testing.T) {
 	t.Parallel()
 	rl := &mockRateLimiter{err: errors.New("redis down")}
 	reached := false
-	mw := RateLimit(rl, 60, "http://localhost", false)
+	mw := RateLimit(rl, 60, false)
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reached = true
 		w.WriteHeader(http.StatusOK)
@@ -109,7 +109,7 @@ func TestRateLimit_FailClosed_OnError(t *testing.T) {
 	t.Parallel()
 	rl := &mockRateLimiter{err: errors.New("redis down")}
 	reached := false
-	mw := RateLimit(rl, 5, "http://localhost", true)
+	mw := RateLimit(rl, 5, true)
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reached = true
 		w.WriteHeader(http.StatusOK)

@@ -55,6 +55,18 @@ URLs after startup:
 
 No `.env` file is needed - all variables have defaults for local development. See `.env.example` for the full list with comments.
 
+`POST /auth/register` and `POST /auth/reissue` require the `X-Admin-Token` header.
+Local dev already presets `ZAAS_ADMIN_TOKEN=local-dev-admin-token` via
+`docker-compose.local.yaml`, so registration works immediately with no setup:
+
+```bash
+curl -X POST http://localhost/api/v1/auth/register \
+  -H "X-Admin-Token: local-dev-admin-token" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "display_name": "Test"}'
+# -> 202 Accepted, check http://localhost:8025 for the verification email
+```
+
 ## Setup (first time)
 
 Install tools, npm dependencies, and git hooks:
@@ -92,6 +104,7 @@ Production-only (no defaults - must be set in production):
 | `DEPLOY_WEBHOOK_SECRET` | Shared secret for the deploy webhook |
 | `GRAFANA_ADMIN_PASSWORD` | Admin password for Grafana UI |
 | `PUBLIC_IMPRINT_*` | Legal name, address, email for the `/imprint` page |
+| `ZAAS_ADMIN_TOKEN` | Gates `/auth/register` and `/auth/reissue` (local dev is exempt - `docker-compose.local.yaml`/`minimal.yaml` already set a fixed value) |
 
 See `.env.example` for the complete list.
 

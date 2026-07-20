@@ -24,6 +24,7 @@ type Config struct {
 	SMTPUser               string
 	SMTPPassword           string
 	SMTPFrom               string
+	AdminToken             string
 }
 
 func Load() Config {
@@ -45,6 +46,7 @@ func Load() Config {
 		SMTPUser:               getEnv("ZAAS_SMTP_USER", ""),
 		SMTPPassword:           getEnv("ZAAS_SMTP_PASSWORD", ""),
 		SMTPFrom:               getEnv("ZAAS_SMTP_FROM", "ZaaS <noreply@zaas.at>"),
+		AdminToken:             getEnv("ZAAS_ADMIN_TOKEN", ""),
 	}
 }
 

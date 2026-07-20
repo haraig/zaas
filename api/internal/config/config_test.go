@@ -11,10 +11,11 @@ func TestDefaults(t *testing.T) {
 	t.Parallel()
 	for _, k := range []string{
 		"ZAAS_PORT", "ZAAS_BASE_URL", "ZAAS_LOG_LEVEL", "ZAAS_LOG_FORMAT",
-		"ZAAS_CORS_ORIGINS", "ZAAS_RATE_LIMIT_RPM", "ZAAS_RATE_LIMIT_BURST",
+		"ZAAS_CORS_ORIGINS", "ZAAS_RATE_LIMIT_RPM",
 		"ZAAS_RATE_LIMIT_BACKEND", "ZAAS_REDIS_URL",
 		"ZAAS_OTEL_ENABLED", "ZAAS_METRICS_ENDPOINT_ENABLED",
 		"ZAAS_SMTP_HOST", "ZAAS_SMTP_PORT", "ZAAS_SMTP_USER", "ZAAS_SMTP_PASSWORD", "ZAAS_SMTP_FROM",
+		"ZAAS_ADMIN_TOKEN",
 	} {
 		os.Unsetenv(k)
 	}
@@ -63,6 +64,9 @@ func TestDefaults(t *testing.T) {
 	if cfg.SMTPFrom != "ZaaS <noreply@zaas.at>" {
 		t.Errorf("SMTPFrom: got %q, want %q", cfg.SMTPFrom, "ZaaS <noreply@zaas.at>")
 	}
+	if cfg.AdminToken != "" {
+		t.Errorf("AdminToken: got %q, want %q", cfg.AdminToken, "")
+	}
 }
 
 func TestOverrides(t *testing.T) {
@@ -72,12 +76,14 @@ func TestOverrides(t *testing.T) {
 	os.Setenv("ZAAS_RATE_LIMIT_RPM", "120")
 	os.Setenv("ZAAS_OTEL_ENABLED", "false")
 	os.Setenv("ZAAS_METRICS_ENDPOINT_ENABLED", "true")
+	os.Setenv("ZAAS_ADMIN_TOKEN", "test-admin-token")
 	defer func() {
 		os.Unsetenv("ZAAS_PORT")
 		os.Unsetenv("ZAAS_BASE_URL")
 		os.Unsetenv("ZAAS_RATE_LIMIT_RPM")
 		os.Unsetenv("ZAAS_OTEL_ENABLED")
 		os.Unsetenv("ZAAS_METRICS_ENDPOINT_ENABLED")
+		os.Unsetenv("ZAAS_ADMIN_TOKEN")
 	}()
 
 	cfg := config.Load()
@@ -96,5 +102,8 @@ func TestOverrides(t *testing.T) {
 	}
 	if cfg.MetricsEndpointEnabled != true {
 		t.Errorf("MetricsEndpointEnabled: got %v, want true", cfg.MetricsEndpointEnabled)
+	}
+	if cfg.AdminToken != "test-admin-token" {
+		t.Errorf("AdminToken: got %q, want %q", cfg.AdminToken, "test-admin-token")
 	}
 }

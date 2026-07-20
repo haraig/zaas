@@ -33,17 +33,19 @@ curl https://zaas.at/api/v1/uuid?count=3
 
 Response envelope: `{"result": ..., "meta": {"endpoint": "...", "timestamp": "...", "params": {...}}}` (single) or `{"results": [...], "meta": {...}}` (multiple).
 
-**Rate limiting:** 60 req/min per IP. Register for a free API key at [zaas.at](https://zaas.at) for 600 req/min. Authenticate with `Authorization: Bearer <key>`.
+**Rate limiting:** 60 req/min per IP. Free API keys give 600 req/min - email contact@zaas.at to request one. Authenticate with `Authorization: Bearer <key>`.
 
 ## Running Locally
 
 ```bash
 # API only - no config needed, all env vars have defaults
-ZAAS_OTEL_ENABLED=false go run ./api/cmd/server
+cd api && ZAAS_OTEL_ENABLED=false go run ./cmd/server
+# curl -s http://localhost:8080/api/v1/uuid | jq -r .result
+# 8751ac24-97d0-4060-b716-5b4ee27293b5
 
 # Full stack (API + web + Grafana observability)
 make dev
-# http://localhost        (main site)
+# http://localhost         (main site)
 # http://grafana.localhost (Grafana, no login in local mode)
 ```
 
@@ -61,7 +63,7 @@ make web-check    # TypeScript check + build web
 
 ## Configuration
 
-All settings are environment variables with sensible defaults - no `.env` file needed for local development. See [`.env.example`](.env.example) for the full list with comments.
+All settings are environment variables with sensible defaults - no `.env` file needed for local development. For the local Docker compose workflows, set values in the repo root `.env` file (copy from [`.env.example`](.env.example)) if you want to override the defaults for the web build, especially `PUBLIC_IMPRINT_*` and `PUBLIC_API_BASE_URL`.
 
 Key variables:
 

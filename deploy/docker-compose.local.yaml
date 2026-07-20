@@ -28,6 +28,7 @@ services:
       OTEL_SERVICE_NAME: "zaas-api"
       ZAAS_SMTP_HOST: "mailpit"
       ZAAS_SMTP_PORT: "1025"
+      ZAAS_ADMIN_TOKEN: "local-dev-admin-token"
     depends_on:
       - mailpit
     # CompileDaemon watches Go files and re-runs the server on changes.
@@ -36,7 +37,7 @@ services:
              CompileDaemon -polling -build='go build -o /tmp/zaas-api ./cmd/server' -command='/tmp/zaas-api'"
 
   web:
-    image: node:22-alpine
+    image: node:26-alpine
     working_dir: /app
     # Run as the host user so Vite's node_modules/.vite cache is not
     # created as root. Without this, `astro check` and `npm run build`
@@ -45,15 +46,24 @@ services:
     volumes:
       - ../web:/app:cached # Mount Astro source for hot-reload
     environment:
+      ASTRO_TELEMETRY_DISABLED: "1"
       PUBLIC_API_BASE_URL: "http://localhost"
+      PUBLIC_IMPRINT_NAME: "${PUBLIC_IMPRINT_NAME:-ZaaS Local Dev}"
+      PUBLIC_IMPRINT_ADDRESS: "${PUBLIC_IMPRINT_ADDRESS:-Local Development Address}"
+      PUBLIC_IMPRINT_EMAIL: "${PUBLIC_IMPRINT_EMAIL:-dev@example.com}"
     ports:
       - "4321:4321" # Exposed for direct browser access if needed
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    command: sh -c "npm install && rm -f .astro/dev.json && npm run dev -- --host 0.0.0.0"
 
   caddy:
     build:
       context: ../web
       dockerfile: Dockerfile
+      args:
+        PUBLIC_API_BASE_URL: "${PUBLIC_API_BASE_URL:-http://localhost:8080}"
+        PUBLIC_IMPRINT_NAME: "${PUBLIC_IMPRINT_NAME:-ZaaS Local Dev}"
+        PUBLIC_IMPRINT_ADDRESS: "${PUBLIC_IMPRINT_ADDRESS:-Local Development Address}"
+        PUBLIC_IMPRINT_EMAIL: "${PUBLIC_IMPRINT_EMAIL:-dev@example.com}"
     image: zaas-web:local
     volumes:
       - ./Caddyfile.local:/etc/caddy/Caddyfile:ro # Override: HTTP only

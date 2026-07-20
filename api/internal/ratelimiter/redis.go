@@ -161,7 +161,7 @@ func randomHex(n int) string {
 // parseScriptResult decodes the three-element slice returned by slidingWindowLua.
 // Returns (allowed, count, oldestMs, error). Returns ErrUnexpectedResult if the
 // slice length is wrong and ErrInvalidResultType if any element cannot be asserted
-// to int64 - both conditions are bugs in the Lua script or unexpected Redis behaviour.
+// to int64 - both conditions are bugs in the Lua script or unexpected Redis behavior.
 func parseScriptResult(res []interface{}) (allowed bool, count int, oldestMs int64, err error) {
 	if len(res) != 3 {
 		return false, 0, 0, ErrUnexpectedResult

@@ -8,9 +8,12 @@ info:
 
     **Base URL:** `https://zaas.at/api/v1`
 
-    **Authentication:** All endpoints are usable anonymously. Provide an
+    **Authentication:** All randomness endpoints are usable anonymously. Provide an
     `Authorization: Bearer <api_key>` header to use your registered API key and
-    receive a higher rate limit. Obtain an API key via `POST /auth/register`.
+    receive a higher rate limit. API keys are issued on request - email the project
+    contact address, and `POST /auth/register` / `POST /auth/reissue` complete the
+    request server-side. `POST /auth/verify` stays public to complete an
+    already-issued registration or reissue.
 
     **Rate limiting:** Anonymous requests are rate-limited per IP. Authenticated
     requests are rate-limited per API key. The current limits are returned in
@@ -42,7 +45,7 @@ tags:
   - name: Random
     description: Randomness endpoints - no API key required (rate limit applies).
   - name: Auth
-    description: API key registration and management.
+    description: API key registration and management. Register/reissue are issued on request by the admin; verify stays public.
 
 paths:
   /dice:
@@ -519,7 +522,9 @@ paths:
       operationId: authRegister
       tags: [Auth]
       summary: Register for an API key
-      description: Submit email and display name to receive a verification email.
+      description: Submit email and display name to receive a verification email. Issued on request - requires the X-Admin-Token header.
+      security:
+        - AdminTokenAuth: []
       requestBody:
         required: true
         content:
@@ -535,6 +540,8 @@ paths:
                 $ref: "#/components/schemas/AcceptedResponse"
         "400":
           $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -575,7 +582,9 @@ paths:
       operationId: authReissue
       tags: [Auth]
       summary: Request API key re-issue
-      description: Submit email to receive a re-issue verification email. Old key will be revoked upon verification.
+      description: Submit email to receive a re-issue verification email. Old key will be revoked upon verification. Issued on request - requires the X-Admin-Token header.
+      security:
+        - AdminTokenAuth: []
       requestBody:
         required: true
         content:
@@ -591,6 +600,8 @@ paths:
                 $ref: "#/components/schemas/AcceptedResponse"
         "400":
           $ref: "#/components/responses/InvalidParam"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -867,7 +878,7 @@ components:
             $ref: "#/components/schemas/Problem"
 
     Unauthorized:
-      description: Invalid or revoked API key
+      description: Invalid or revoked API key, or missing/invalid admin token
       content:
         application/problem+json:
           schema:
@@ -892,3 +903,8 @@ components:
       type: http
       scheme: bearer
       description: "API key in format: zaas_<32 hex chars>"
+    AdminTokenAuth:
+      type: apiKey
+      in: header
+      name: X-Admin-Token
+      description: "Admin token required for /auth/register and /auth/reissue."

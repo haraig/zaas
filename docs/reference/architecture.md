@@ -42,6 +42,8 @@ C4Container
 
 **Key architectural property:** All external infrastructure is optional. Without PostgreSQL, auth endpoints are disabled. Without Redis, rate limiting falls back to an in-memory backend. Without SMTP, registration emails cannot be sent. The core randomness endpoints always work with zero dependencies.
 
+**Registration and reissue require admin approval:** `POST /auth/register` and `POST /auth/reissue` require a matching `X-Admin-Token` header (`ZAAS_ADMIN_TOKEN`) - see [Auth and API Keys](#auth-and-api-keys) and `docs/explanation/design-decisions.md`.
+
 ## Request Flow
 
 ```
@@ -139,7 +141,7 @@ The middleware logic per request:
 1. If `Authorization: Bearer <key>` is present: hash the key, look up in the `clients` table. Valid key -> rate limit by client ID at the client's `rate_limit_rpm` (default 600). Invalid or revoked key -> HTTP 401 `INVALID_API_KEY` (not a silent fallback to IP limiting).
 2. No key -> rate limit by IP at `ZAAS_RATE_LIMIT_RPM` (default 60 RPM).
 
-Auth endpoints (`/api/v1/auth/*`) have tighter per-IP limits (5 req/hour for register/reissue, 20 req/hour for verify) applied by a separate middleware on the auth router group.
+Auth endpoints (`/api/v1/auth/*`) share a tighter per-IP limit (5 req/min) applied by a separate middleware on the auth router group, in addition to the `X-Admin-Token` gate on register/reissue described below.
 
 ### IP extraction for anonymous rate limiting
 
@@ -149,7 +151,15 @@ This strategy is implemented in `api/internal/middleware/ratelimit.go:extractIP`
 
 ## Auth and API Keys
 
-Self-service free API key registration. No payment required.
+Free API keys, no payment required. Keys are currently issued on request: email
+`contact@zaas.at`, and the admin registers or reissues the key on your behalf via
+`POST /auth/register` / `POST /auth/reissue`, each requiring a matching
+`X-Admin-Token` header (`ZAAS_ADMIN_TOKEN`) on top of the existing per-IP rate
+limit - see `docs/reference/runbook.md` ("Issuing an API Key on Request") for the
+admin-side procedure and `docs/explanation/design-decisions.md` for the reasoning.
+`POST /auth/verify` stays public and unauthenticated - it only completes a
+registration/reissue that an admin already started, using a token the requester
+received by email.
 
 **Key format:** `zaas_` prefix + 32 random lowercase hex characters (128 bits of entropy). Example: `zaas_a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6`. The `zaas_` prefix makes keys grep-able in logs and identifiable if accidentally committed.
 
@@ -159,13 +169,13 @@ Self-service free API key registration. No payment required.
 
 **Registration flow:**
 
-1. `POST /api/v1/auth/register` with `{"email": "...", "display_name": "..."}` - always returns 202 (prevents email enumeration). Creates an unverified client row and a verification token (24h expiry), sends an email with the verification link.
-2. `GET /api/v1/auth/verify?token=<token>&type=registration` - validates the token, generates the API key, stores its hash, marks the client verified. Returns the plaintext key once - it is never shown again.
+1. Admin runs `POST /api/v1/auth/register` with `{"email": "...", "display_name": "..."}` and the `X-Admin-Token` header - always returns 202 (prevents email enumeration). Creates an unverified client row and a verification token (24h expiry), sends an email with the verification link.
+2. Requester completes it themselves via `POST /api/v1/auth/verify` with `{"token": "<token>", "type": "registration"}` (called from the `/verify` landing page linked in the email) - validates the token, generates the API key, stores its hash, marks the client verified. Returns the plaintext key once - it is never shown again.
 
 **Re-issue flow:**
 
-1. `POST /api/v1/auth/reissue` with `{"email": "..."}` - always returns 202. Sends a re-issue email if the email is known and verified.
-2. `GET /api/v1/auth/verify?token=<token>&type=reissue` - revokes the old key, generates and stores a new one. Returns the new plaintext key.
+1. Admin runs `POST /api/v1/auth/reissue` with `{"email": "..."}` and the `X-Admin-Token` header - always returns 202. Sends a re-issue email if the email is known and verified.
+2. Requester completes it themselves via `POST /api/v1/auth/verify` with `{"token": "<token>", "type": "reissue"}` - revokes the old key, generates and stores a new one. Returns the new plaintext key.
 
 **Revocation:** Soft-delete via `revoked_at` timestamp. Rows are never deleted, preserving audit trail.
 

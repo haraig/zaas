@@ -23,7 +23,7 @@ request.
 ## How to fix
 
 Wait `retry_after` seconds before sending the next request. To increase your
-limit, register for a free API key at https://zaas.at.
+limit, email contact@zaas.at to request a free API key.
 
 ## Example response
 
@@ -32,7 +32,7 @@ limit, register for a free API key at https://zaas.at.
   "type": "https://zaas.at/errors/rate-limited",
   "title": "Too Many Requests",
   "status": 429,
-  "detail": "Rate limit exceeded (60 req/min). Register for a free API key at https://zaas.at for higher limits.",
+  "detail": "Rate limit exceeded (60 req/min). Email contact@zaas.at to request a free API key for higher limits.",
   "instance": "/api/v1/dice",
   "code": "RATE_LIMITED",
   "retry_after": 42,

@@ -112,6 +112,31 @@ API keys are never stored in plaintext. Only the SHA-256 hash and a short prefix
 
 The consequence: a lost API key cannot be recovered. The re-issue flow exists specifically because of this. This is the same model used by GitHub personal access tokens and similar systems. The operational overhead (users must store their key) is acceptable given the security benefit (a database breach does not expose usable keys).
 
+## Auth: Registration and Reissue Are Issued On Request
+
+`POST /auth/register` and `POST /auth/reissue` were originally fully public and
+unauthenticated, protected only by a shared per-IP rate limit (5 req/min, covering
+all three auth routes together). That protection stops one attacker hammering one
+target, but not the actual abuse vector: each call sends a real email to an
+attacker-supplied address, and an attacker who sprays one request each across a
+large list of distinct addresses - by rotating source IPs or simply staying under
+the per-IP limit - faces no throttle at all, since nothing limits how many *distinct*
+recipients get emailed. That's a mail-relay/spam vector and a risk to the service's
+sending domain reputation, not merely an annoyance.
+
+Per-email cooldowns and tighter per-IP limits don't close this gap either: they bound
+repetition from one caller, not the number of distinct targets a caller can reach.
+The two mitigations that actually address distinct-target spam are CAPTCHA (gates on
+"is this a human," independent of IP or target) and admin-only access (no public
+caller can trigger a send at all). Self-service signup with CAPTCHA is planned; it's
+separate, larger work than adding a gate.
+
+We're issuing keys manually in the meantime: `X-Admin-Token` gates registration and
+reissue, a prospective user emails to request a key, and the admin runs the request
+(see `docs/reference/runbook.md`, "Issuing an API Key on Request"). `POST /auth/verify`
+stays public, since it only completes a flow the admin already started and can't be
+used to originate new outbound email on its own.
+
 ## Email: Stdlib Only
 
 The email implementation uses `net/smtp` from the standard library with no external dependency. The tradeoff is manual MIME construction (multipart, quoted-printable encoding) versus convenience libraries like `gomail`. The choice keeps the dependency count low for a non-critical path.

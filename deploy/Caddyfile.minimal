@@ -1,8 +1,12 @@
-# Local development Caddyfile.
+# Minimal stack Caddyfile (used by docker-compose.minimal.yaml).
 # HTTP only on port 80 - no TLS, no HSTS (dev convenience).
 # Routes /api/* to the Go API container.
 # Routes /* to the Astro dev server container (port 4321, hot-reload).
 # Security headers are included so local behavior matches production.
+#
+# No tracing directive here: the minimal stack has no otel-collector service,
+# so exporting spans would just fail with connection-refused errors.
+# No grafana.localhost block either: the minimal stack has no Grafana service.
 
 {
     # Enable Prometheus metrics on the admin API (caddy:2019/metrics).
@@ -10,11 +14,6 @@
 }
 
 :80 {
-
-    # Distributed tracing: creates a root span and propagates traceparent to upstream.
-    tracing {
-        span caddy-ingress
-    }
 
     # Security headers (mirrors production minus HSTS and HTTPS-only directives).
     header {
@@ -48,17 +47,4 @@
             }
         }
     }
-}
-
-# Grafana UI - accessible at http://grafana.localhost in local dev.
-# *.localhost resolves to 127.0.0.1 natively (RFC 6761) - no /etc/hosts needed.
-# Plain HTTP only (prefix forces no TLS attempt).
-http://grafana.localhost {
-
-    # Distributed tracing: creates a root span and propagates traceparent to upstream.
-    tracing {
-        span caddy-ingress
-    }
-
-    reverse_proxy grafana:3000
 }

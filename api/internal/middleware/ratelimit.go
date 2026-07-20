@@ -35,7 +35,7 @@ func newRateLimitMetrics() rateLimitMetrics {
 // For authenticated requests (client in context): uses AllowN with client's RPM.
 // For anonymous requests: uses Allow with the configured default RPM per IP.
 // When failClosed is true, a backend error returns 503 instead of passing the request through.
-func RateLimit(rl ratelimiter.RateLimiter, rpm int, baseURL string, failClosed bool) func(http.Handler) http.Handler {
+func RateLimit(rl ratelimiter.RateLimiter, rpm int, failClosed bool) func(http.Handler) http.Handler {
 	m := newRateLimitMetrics()
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +107,7 @@ func RateLimit(rl ratelimiter.RateLimiter, rpm int, baseURL string, failClosed b
 					"type":        "https://zaas.at/errors/rate-limited",
 					"title":       "Too Many Requests",
 					"status":      429,
-					"detail":      fmt.Sprintf("Rate limit exceeded (%d req/min). Register for a free API key at %s for higher limits.", limit, baseURL),
+					"detail":      fmt.Sprintf("Rate limit exceeded (%d req/min). Email contact@zaas.at to request a free API key for higher limits.", limit),
 					"instance":    r.URL.Path,
 					"code":        "RATE_LIMITED",
 					"retry_after": retryAfter,
