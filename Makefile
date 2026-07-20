@@ -93,7 +93,12 @@ build:
 
 # Build Web (Caddy + Astro) Docker image
 web-build-docker:
-	docker build -t zaas-web:local web/
+	docker build \
+		--build-arg PUBLIC_API_BASE_URL="$(PUBLIC_API_BASE_URL)" \
+		--build-arg PUBLIC_IMPRINT_NAME="$(PUBLIC_IMPRINT_NAME)" \
+		--build-arg PUBLIC_IMPRINT_ADDRESS="$(PUBLIC_IMPRINT_ADDRESS)" \
+		--build-arg PUBLIC_IMPRINT_EMAIL="$(PUBLIC_IMPRINT_EMAIL)" \
+		-t zaas-web:local web/
 
 # Build Astro static site
 web-build:

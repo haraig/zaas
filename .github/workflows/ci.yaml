@@ -109,7 +109,7 @@ jobs:
       - name: Trivy scan - API image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: zaas-api:latest
+          image-ref: zaas-api:local
           format: table
           exit-code: "1"
           ignore-unfixed: true
