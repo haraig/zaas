@@ -26,6 +26,12 @@ updates:
     labels:
       - dependencies
       - web
+    ignore:
+      # Astro check / @astrojs/language-server break on TypeScript 7 (https://github.com/withastro/astro/issues/17268).
+      # Keep typescript on ^6 until Astro supports TS 7.
+      - dependency-name: typescript
+        versions:
+          - ">=7.0.0"
 
   # npm - root (commitlint)
   - package-ecosystem: npm
