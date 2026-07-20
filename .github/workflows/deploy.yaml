@@ -55,6 +55,11 @@ jobs:
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
             ${{ steps.meta.outputs.image }}:latest
 
+      - name: Log API image digest
+        run: |
+          echo "API image digest: ${{ steps.api-push.outputs.digest }}"
+          echo "Set ZAAS_API_IMAGE=ghcr.io/${{ github.repository_owner }}/zaas/api@${{ steps.api-push.outputs.digest }} in production .env to pin to this exact image."
+
       - name: Build and push Web image
         id: web-push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -69,6 +74,7 @@ jobs:
             PUBLIC_IMPRINT_NAME=${{ vars.PUBLIC_IMPRINT_NAME }}
             PUBLIC_IMPRINT_ADDRESS=${{ vars.PUBLIC_IMPRINT_ADDRESS }}
             PUBLIC_IMPRINT_EMAIL=${{ vars.PUBLIC_IMPRINT_EMAIL }}
+            PUBLIC_PRIVACY_EMAIL=${{ vars.PUBLIC_PRIVACY_EMAIL }}
 
       - name: Log web image digest
         run: |

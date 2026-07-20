@@ -119,8 +119,13 @@ sudo -u deploy sh -c '
 '
 
 # Create .env
-sudo -u deploy cp /opt/zaas/.env.example /opt/zaas/.env
+sudo -u deploy sh -c '
+  cp /opt/zaas/.env.example /opt/zaas/.env
+  chmod 600 /opt/zaas/.env
+'
 ```
+
+The `chmod 600` restricts the file to the `deploy` user only, since it will hold secrets (`GRAFANA_ADMIN_PASSWORD`, `DEPLOY_WEBHOOK_SECRET`).
 
 Edit `/opt/zaas/.env` and set at minimum:
 
@@ -128,18 +133,18 @@ Edit `/opt/zaas/.env` and set at minimum:
 ZAAS_DOMAIN=zaas.at
 GRAFANA_ADMIN_PASSWORD=<strong-password>
 DEPLOY_WEBHOOK_SECRET=<openssl rand -hex 32>
-
-PUBLIC_API_BASE_URL=https://zaas.at
-PUBLIC_IMPRINT_NAME=Your Name
-PUBLIC_IMPRINT_ADDRESS=Street 1\nCity, Country
-PUBLIC_IMPRINT_EMAIL=contact@zaas.at
-PUBLIC_PRIVACY_EMAIL=privacy@zaas.at
 ```
+
+> `PUBLIC_API_BASE_URL`, `PUBLIC_IMPRINT_NAME`, `PUBLIC_IMPRINT_ADDRESS`, `PUBLIC_IMPRINT_EMAIL`, and
+> `PUBLIC_PRIVACY_EMAIL` are **not** read from this file. The web image is a prebuilt static site -
+> these values are baked in at CI build time from GitHub Actions variables (see Section 3.2 below).
+> Setting them here has no effect in production.
 
 Start the stack:
 
 ```bash
 sudo -u deploy sh -c '
+  cd /opt/zaas
   docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file /opt/zaas/.env up -d
 '
 ```

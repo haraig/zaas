@@ -20,7 +20,9 @@ This guide covers first-time server setup and explains how automated deploys wor
 
 ## Prerequisites
 
-- A server with Docker and the Docker Compose plugin installed
+- A server with Docker and the Docker Compose plugin installed, and `git`
+  (both are already present if provisioned via [infrastructure.md](infrastructure.md) on the
+  `ubuntu-26.04` Hetzner image - Docker is installed by cloud-init, and `git` ships with the base image)
 - DNS A records pointing to your server for `$ZAAS_DOMAIN` and `grafana.$ZAAS_DOMAIN`
 - Ports 80 and 443 open (Caddy handles TLS via Let's Encrypt)
 
@@ -28,37 +30,34 @@ This guide covers first-time server setup and explains how automated deploys wor
 
 This is a one-time setup. After this, every push to `main` deploys automatically.
 
-**1. SSH into the server and install prerequisites:**
+**1. Create a dedicated deploy user:**
 
 ```bash
-ssh root@<server-ip>
-apt-get update && apt-get install -y docker.io docker-compose-plugin git
-systemctl enable --now docker
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups docker deploy
+sudo mkdir -p /opt/zaas
+sudo chown deploy:deploy /opt/zaas
 ```
 
-**2. Create a dedicated deploy user:**
+**2. Clone the repository (sparse checkout - `deploy/` folder only):**
 
 ```bash
-useradd --system --no-create-home --shell /usr/sbin/nologin --groups docker deploy
-mkdir -p /opt/zaas
-chown deploy:deploy /opt/zaas
-```
-
-**3. Clone the repository (sparse checkout - `deploy/` folder only):**
-
-```bash
-su -s /bin/sh deploy -c '
+sudo su -s /bin/sh deploy -c '
   set -e
   git clone --filter=blob:none --sparse https://github.com/haraig/zaas.git /opt/zaas
   git -C /opt/zaas sparse-checkout set deploy
 '
 ```
 
-**4. Create the `.env` file:**
+**3. Create the `.env` file:**
 
 ```bash
-su -s /bin/sh deploy -c 'cp /opt/zaas/.env.example /opt/zaas/.env'
+sudo su -s /bin/sh deploy -c '
+  cp /opt/zaas/.env.example /opt/zaas/.env
+  chmod 600 /opt/zaas/.env
+'
 ```
+
+The `chmod 600` restricts the file to the `deploy` user only, since it will hold secrets (`GRAFANA_ADMIN_PASSWORD`, `DEPLOY_WEBHOOK_SECRET`).
 
 Edit `/opt/zaas/.env` and set at minimum:
 
@@ -66,27 +65,30 @@ Edit `/opt/zaas/.env` and set at minimum:
 ZAAS_DOMAIN=your-domain.example
 GRAFANA_ADMIN_PASSWORD=<strong-password>
 DEPLOY_WEBHOOK_SECRET=<generate with: openssl rand -hex 32>
-
-# Required for imprint/privacy pages (Austrian ECG section 5)
-PUBLIC_IMPRINT_NAME=Your Name
-PUBLIC_IMPRINT_ADDRESS=Street 1\nCity, Country
-PUBLIC_IMPRINT_EMAIL=contact@example.com
 ```
 
 > The `DEPLOY_WEBHOOK_SECRET` must match the `DEPLOY_WEBHOOK_SECRET` secret set in GitHub Actions.
 
-**5. Start the full stack:**
+> `PUBLIC_API_BASE_URL`, `PUBLIC_IMPRINT_NAME`, `PUBLIC_IMPRINT_ADDRESS`, `PUBLIC_IMPRINT_EMAIL`, and
+> `PUBLIC_PRIVACY_EMAIL` are **not** read from this file. The web image is a prebuilt static site
+> (`output: "static"` in Astro) - these values are baked in at CI build time from GitHub Actions
+> variables (see [GitHub Actions Configuration](#github-actions-configuration) below), and the
+> `caddy` service never receives them as container environment variables. Setting them here has no
+> effect in production.
+
+**4. Start the full stack:**
 
 ```bash
-su -s /bin/sh deploy -c '
+sudo su -s /bin/sh deploy -c '
   set -e
+  cd /opt/zaas
   docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file /opt/zaas/.env up -d
 '
 ```
 
 Caddy provisions TLS certificates automatically on first start.
 
-**6. Verify:**
+**5. Verify:**
 
 ```bash
 curl https://your-domain.example/healthz
@@ -121,6 +123,7 @@ Additionally, configure these **Actions variables** for the web build:
 | `PUBLIC_IMPRINT_NAME` | Legal name for imprint page |
 | `PUBLIC_IMPRINT_ADDRESS` | Postal address (use `\n` as line separator) |
 | `PUBLIC_IMPRINT_EMAIL` | Contact email for imprint page |
+| `PUBLIC_PRIVACY_EMAIL` | Email for GDPR data subject requests (falls back to `PUBLIC_IMPRINT_EMAIL` if unset) |
 
 ## Branch Protection
 

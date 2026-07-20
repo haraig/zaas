@@ -51,6 +51,7 @@ services:
       PUBLIC_IMPRINT_NAME: "${PUBLIC_IMPRINT_NAME:-ZaaS Local Dev}"
       PUBLIC_IMPRINT_ADDRESS: "${PUBLIC_IMPRINT_ADDRESS:-Local Development Address}"
       PUBLIC_IMPRINT_EMAIL: "${PUBLIC_IMPRINT_EMAIL:-dev@example.com}"
+      PUBLIC_PRIVACY_EMAIL: "${PUBLIC_PRIVACY_EMAIL:-dev@example.com}"
     ports:
       - "4321:4321" # Exposed for direct browser access if needed
     command: sh -c "npm install && rm -f .astro/dev.json && npm run dev -- --host 0.0.0.0"
@@ -64,6 +65,7 @@ services:
         PUBLIC_IMPRINT_NAME: "${PUBLIC_IMPRINT_NAME:-ZaaS Local Dev}"
         PUBLIC_IMPRINT_ADDRESS: "${PUBLIC_IMPRINT_ADDRESS:-Local Development Address}"
         PUBLIC_IMPRINT_EMAIL: "${PUBLIC_IMPRINT_EMAIL:-dev@example.com}"
+        PUBLIC_PRIVACY_EMAIL: "${PUBLIC_PRIVACY_EMAIL:-dev@example.com}"
     image: zaas-web:local
     volumes:
       - ./Caddyfile.local:/etc/caddy/Caddyfile:ro # Override: HTTP only

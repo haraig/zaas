@@ -47,6 +47,7 @@ jobs:
       PUBLIC_IMPRINT_NAME: ${{ vars.PUBLIC_IMPRINT_NAME }}
       PUBLIC_IMPRINT_ADDRESS: ${{ vars.PUBLIC_IMPRINT_ADDRESS }}
       PUBLIC_IMPRINT_EMAIL: ${{ vars.PUBLIC_IMPRINT_EMAIL }}
+      PUBLIC_PRIVACY_EMAIL: ${{ vars.PUBLIC_PRIVACY_EMAIL }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -70,6 +71,7 @@ jobs:
       PUBLIC_IMPRINT_NAME: ${{ vars.PUBLIC_IMPRINT_NAME }}
       PUBLIC_IMPRINT_ADDRESS: ${{ vars.PUBLIC_IMPRINT_ADDRESS }}
       PUBLIC_IMPRINT_EMAIL: ${{ vars.PUBLIC_IMPRINT_EMAIL }}
+      PUBLIC_PRIVACY_EMAIL: ${{ vars.PUBLIC_PRIVACY_EMAIL }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 

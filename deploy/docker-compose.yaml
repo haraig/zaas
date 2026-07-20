@@ -13,10 +13,9 @@ services:
   # ── Application ────────────────────────────────────────────────────────────
 
   api:
-    build:
-      context: ../api
-      dockerfile: Dockerfile
-    image: zaas-api:local
+    # In production, set ZAAS_API_IMAGE to the immutable digest output by the deploy workflow
+    # (e.g. ghcr.io/haraig/zaas/api@sha256:<digest>). The :latest fallback is for local dev only.
+    image: ${ZAAS_API_IMAGE:-ghcr.io/haraig/zaas/api:latest}
     restart: unless-stopped
     environment:
       ZAAS_PORT: "8080"
