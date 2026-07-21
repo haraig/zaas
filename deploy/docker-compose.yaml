@@ -1,6 +1,7 @@
 # Full stack: API + Caddy + OTel observability backends.
 # Production-equivalent. Caddy handles TLS in production (needs ZAAS_DOMAIN set).
 # For local dev, use with docker-compose.local.yml overlay.
+# Use linux/amd64 images.
 #
 # Usage (production):
 #   docker compose -f deploy/docker-compose.yml up -d
@@ -67,7 +68,7 @@ services:
       - otel-collector
 
   webhook:
-    image: almir/webhook:2.8.2@sha256:051d3a83075743b19c13e8da93b390eaca5505f278e2ca5ffdec162f2cf5121d
+    image: almir/webhook:2.8.3@sha256:f77cc91c91d1527b48052280af38b50791e842ad8dd291e9b360a0c13c9ca991
     restart: unless-stopped
     environment:
       DEPLOY_WEBHOOK_SECRET: "${DEPLOY_WEBHOOK_SECRET}"
@@ -81,14 +82,14 @@ services:
       - caddy
 
   postgres:
-    image: postgres:16-alpine@sha256:79950da386bda7fcc9d57aa9aa9be6c6d7407596a9b8f68014b09a778a9ab316
+    image: postgres:18.4-alpine3.24@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
     restart: unless-stopped
     environment:
       POSTGRES_USER: zaas
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set. Generate one with: openssl rand -base64 24}"
       POSTGRES_DB: zaas
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zaas"]
       interval: 10s
@@ -97,7 +98,7 @@ services:
       start_period: 10s
 
   postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.19.1@sha256:a0c79a8210d1079760ebeb3fa5c07659bc3ceb9ccc8bb921ba1073ef6fd4164f
+    image: prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
     restart: unless-stopped
     environment:
       DATA_SOURCE_NAME: "postgresql://zaas:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set. Generate one with: openssl rand -base64 24}@postgres:5432/zaas?sslmode=disable"
@@ -106,7 +107,7 @@ services:
         condition: service_healthy
 
   redis:
-    image: redis:7-alpine@sha256:b1addbe72465a718643cff9e60a58e6df1841e29d6d7d60c9a85d8d72f08d1a7
+    image: redis:8.8.0-alpine3.23@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005
     restart: unless-stopped
     command: redis-server --save 60 1 --loglevel warning
     volumes:
@@ -119,7 +120,7 @@ services:
       start_period: 5s
 
   redis-exporter:
-    image: oliver006/redis_exporter:v1.84.0@sha256:4b5e213edb4fb7d1d02d38401a982ece07461bf0b5669a5c2b433937aeb86ede
+    image: oliver006/redis_exporter:v1.87.0@sha256:9ca6f929a8abc518d78158757922444f1cf807661a2238f44b28c3cd08a1b652
     restart: unless-stopped
     environment:
       REDIS_ADDR: "redis://redis:6379"
@@ -130,7 +131,7 @@ services:
   # ── OTel Observability Stack ───────────────────────────────────────────────
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.152.1@sha256:c68d838080b5d108ed1203716783465511f3a86ae2b039342ac578d2b4e82979
+    image: otel/opentelemetry-collector-contrib:0.156.0@sha256:125bdbeb7590cc1952c5b3430ecf14063568980c2c93d5b38676cc0446ed8108
     restart: unless-stopped
     # Needs root (UID 0) to read /var/lib/docker/containers (owned by root, mode 700).
     user: "0"
@@ -145,7 +146,7 @@ services:
       - loki
 
   tempo:
-    image: grafana/tempo:2.10.5@sha256:7be8586c0f25398428bb63c07db0a88283f073aa44c5f4a3be21e97fe83de502
+    image: grafana/tempo:2.10.7@sha256:032b3acb51ed02c4b801473d54bb63e9e9f13738d215126d9843c30283794f4b
     restart: unless-stopped
     volumes:
       - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
@@ -156,7 +157,7 @@ services:
     command: ["-config.file=/etc/tempo/tempo.yaml"]
 
   prometheus:
-    image: prom/prometheus:v3.11.3@sha256:387d460e3b15ec55d2837fc9275388a4730dbc8c0287926d3f662c5298ce7385
+    image: prom/prometheus:v3.13.1@sha256:3c42b892cf723fa54d2f262c37a0e1f80aa8c8ddb1da7b9b0df9455a35a7f893
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -174,7 +175,7 @@ services:
       - "--web.enable-remote-write-receiver"
 
   grafana:
-    image: grafana/grafana:13.0.1@sha256:3625fdfa3cab904abdf9faaff8f40de0639b456ac5c5d322964fe705051d5455
+    image: grafana/grafana:13.0.4@sha256:fc6c7447962d7523090407b94da705fdb6e7ac855c9c4f0293d91a87785a77b0
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -198,7 +199,7 @@ services:
       - loki
 
   loki:
-    image: grafana/loki:3.7.2@sha256:800ec439ed2692b79c5a1fe17a6d2955f8999ad5d05f0276c6e4a10ac11cc491
+    image: grafana/loki:3.7.3@sha256:70b9f699fc9bb868b62f1cfd4f787dfa50242f1fd92e6089787d5d7daea75fe8
     restart: unless-stopped
     volumes:
       - ./loki.yaml:/etc/loki/local-config.yaml:ro
@@ -208,7 +209,7 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
 
   alertmanager:
-    image: prom/alertmanager:v0.28.1@sha256:27c475db5fb156cab31d5c18a4251ac7ed567746a2483ff264516437a39b15ba
+    image: prom/alertmanager:v0.33.1@sha256:9e082985f56f4c8c9f724e18f2288c6708f472e56a5286b8863d080434ea065d
     restart: unless-stopped
     volumes:
       - ./alertmanager.yaml:/etc/alertmanager/alertmanager.yaml:ro
