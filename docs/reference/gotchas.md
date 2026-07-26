@@ -19,6 +19,26 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### Docker Compose's implicit `.env` lookup ignores the working directory
+
+**Symptom:** Setting a variable in the repo root `.env` file (e.g. `ZAAS_RATE_LIMIT_BACKEND=redis`) had no effect on `make dev`, even after rebuilding images from scratch.
+
+**Gotcha:** Docker Compose's implicit `.env` file discovery is relative to the directory of the *first* `-f` file (confirmed by `docker compose --help`: `--project-directory` defaults to "the path of the, first specified, Compose file"), not the current working directory. `make dev` runs `docker compose -f deploy/docker-compose.yaml -f deploy/docker-compose.local.yaml up` from the repo root, so Compose looked for `deploy/.env` instead of the actual `.env` at the repo root, found nothing, and every `${VAR:-default}` substitution silently fell back to its default. The same gap existed in `deploy/webhook/redeploy.sh`, which would have made automated production redeploys silently ignore `/opt/zaas/.env` (`ZAAS_DOMAIN`, `GRAFANA_ADMIN_PASSWORD`, etc.) on every push to `main`.
+
+**Fix:** Always pass `--env-file` explicitly rather than relying on implicit discovery. `.env` is optional for local dev, so the Makefile only adds the flag when the file exists (`$(if $(wildcard .env),--env-file .env,)`) - passing `--env-file` with a nonexistent path is a hard error, unlike the (silently-skipped) implicit lookup. Avoid `--project-directory` as an alternative fix: it also changes the default Compose project name (derived from the same directory), which would rename the project's Docker networks/volumes and orphan existing data on an already-running stack.
+
+---
+
+### `.env.example` shipped a default that silently broke a critical Prometheus alert
+
+**Symptom:** None visible until `--env-file` is wired up correctly (see above) - then the `ZaasApiDown` critical alert (`up{job="zaas-api"} == 0`) would fire permanently even with a healthy API.
+
+**Gotcha:** `ZAAS_METRICS_ENDPOINT_ENABLED` had three different defaults: `false` in the Go binary (`config.go`, a safe default for a standalone run with no reverse proxy), `true` in `deploy/docker-compose.yaml`'s `${VAR:-true}` fallback, and an explicit `false` in `.env.example`. Since `deploy.md` has operators `cp .env.example .env` for production, the explicit example value silently overrode the compose file's `true` default - disabling the `/metrics` endpoint that `deploy/prometheus.yaml`'s always-on `zaas-api` scrape job (and the `ZaasApiDown` alert built on it) depends on. The endpoint is never exposed publicly (`deploy/Caddyfile` doesn't proxy it, and the API container publishes no port), so there was no security reason for the conservative default to leak into the example file.
+
+**Fix:** Set `ZAAS_METRICS_ENDPOINT_ENABLED=true` in `.env.example`, matching the Compose file's own default. Explicit values in an example/template file that gets copied verbatim take precedence over a downstream default - a `${VAR:-default}` fallback only helps for variables the example file leaves unset.
+
+---
+
 ### UFW deny-all default silently blocks HTTP/HTTPS
 
 

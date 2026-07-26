@@ -24,17 +24,23 @@ generate:
 
 # ── Development ──
 
+# Compose's implicit .env lookup is relative to the first -f file's directory
+# (deploy/), not the repo root, so it silently misses a root .env unless we
+# point at it explicitly. .env is optional for local dev, so only pass
+# --env-file when it exists - passing a nonexistent path is a hard error.
+ENV_FILE_FLAG = $(if $(wildcard .env),--env-file .env,)
+
 # Start full stack via Docker Compose
 dev:
-	POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-zaas} docker compose -f deploy/docker-compose.yaml -f deploy/docker-compose.local.yaml up
+	POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-zaas} docker compose $(ENV_FILE_FLAG) -f deploy/docker-compose.yaml -f deploy/docker-compose.local.yaml up
 
 # Start minimal stack: API + web + Caddy only (no DB, Redis, or observability)
 dev-minimal:
-	docker compose -f deploy/docker-compose.minimal.yaml up
+	docker compose $(ENV_FILE_FLAG) -f deploy/docker-compose.minimal.yaml up
 
 # Stop the local dev stack (no volume removal)
 stop:
-	POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-zaas} docker compose -f deploy/docker-compose.yaml -f deploy/docker-compose.local.yaml down
+	POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-zaas} docker compose $(ENV_FILE_FLAG) -f deploy/docker-compose.yaml -f deploy/docker-compose.local.yaml down
 
 # Start Astro dev server
 web-dev:
@@ -117,7 +123,7 @@ web-check: web-lint web-build
 
 # Stop containers and remove volumes
 clean:
-	POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-zaas} docker compose -f deploy/docker-compose.yaml -f deploy/docker-compose.local.yaml down -v
+	POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-zaas} docker compose $(ENV_FILE_FLAG) -f deploy/docker-compose.yaml -f deploy/docker-compose.local.yaml down -v
 
 # Remove all generated/cached build artifacts (node_modules, Astro cache, dist)
 distclean: clean
