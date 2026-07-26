@@ -16,7 +16,7 @@ This guide covers first-time server setup and explains how automated deploys wor
 | Tempo | Distributed trace storage |
 | Loki | Log storage |
 | Grafana | Observability dashboards |
-| Webhook | Receives deploy triggers from GitHub Actions |
+| Webhook | Receives deploy triggers from GitHub Actions. Built locally from `deploy/webhook/Dockerfile` (not pulled from a registry) - see step 4. |
 
 ## Prerequisites
 
@@ -86,6 +86,13 @@ sudo su -s /bin/sh deploy -c '
 '
 ```
 
+Unlike the other services, `webhook` has no `image:` to pull - it's built locally from `deploy/webhook/Dockerfile`, so this first `up -d` also builds it (needs outbound network access for `apk add`). Confirm it built with the tools `redeploy.sh` needs:
+
+```bash
+docker exec deploy-webhook-1 git --version
+docker exec deploy-webhook-1 docker --version
+```
+
 Caddy provisions TLS certificates automatically on first start.
 
 **5. Verify:**
@@ -104,6 +111,14 @@ From this point on, every push to `main` that passes CI will:
 3. Trigger a rolling restart on the server via the deploy webhook
 
 Changes to `deploy/` configs (Caddyfile, Grafana dashboards, etc.) are picked up via `git pull` in the deploy script.
+
+> `redeploy.sh` only recreates `api` and `caddy` (`--no-deps api caddy`). Changes to the `webhook` service itself - `deploy/webhook/hooks.json`, `redeploy.sh`, `deploy/webhook/Dockerfile`, or its `docker-compose.yaml` block - are **not** applied automatically, even after `git pull` fetches them. `docker compose up -d` also won't recreate a running container just because a bind-mounted file's contents changed (only config diffs trigger recreation). After such a change, rebuild and force-restart it manually on the server:
+>
+> ```bash
+> cd /opt/zaas
+> docker compose -f deploy/docker-compose.yaml --env-file .env build webhook
+> docker compose -f deploy/docker-compose.yaml --env-file .env up -d --force-recreate --no-deps webhook
+> ```
 
 ## GitHub Actions Configuration
 

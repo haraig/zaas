@@ -107,6 +107,26 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### `webhook -template` mode chokes on JSON-escaped quotes in `hooks.json`
+
+**Symptom:** The deploy webhook returned `500 invalid payload signatures` on every request regardless of the secret used, even right after rotating `DEPLOY_WEBHOOK_SECRET` on both GitHub and the server and confirming the container's env var matched exactly.
+
+**Gotcha:** `deploy/webhook/hooks.json` referenced the secret as `{{getenv \"DEPLOY_WEBHOOK_SECRET\"}}` (JSON-escaped quotes), and the `webhook` container's `command` never passed `-template`. Without `-template`, `webhook` never evaluates `{{ }}` placeholders at all - it treats that whole string as the literal secret, so it silently and permanently compares against `{{getenv \"DEPLOY_WEBHOOK_SECRET\"}}` no matter what the env var actually contains. This is why signature errors were byte-identical across secret rotations - a strong tell that the running process wasn't even looking at the env var. Adding `-template` alone then broke startup with `template: hooks:9: unexpected "\\" in operand`: `-template` parses the raw file bytes as a Go template *before* JSON parsing, so the JSON-escaped `\"` is a literal backslash character to the template engine, not a quote. The correct syntax uses unescaped quotes inside the `{{ }}` action (`{{getenv "DEPLOY_WEBHOOK_SECRET"}}`), producing a file that is deliberately not valid JSON until the template executes and substitutes the real value.
+
+**Fix:** Pass `-template` in the `webhook` command, and write template placeholders in `hooks.json` with unescaped quotes, not JSON-escaped ones.
+
+---
+
+### `docker compose up -d` does not restart a container when only a bind-mounted file's contents change
+
+**Symptom:** After fixing `hooks.json` and re-running `docker compose -f deploy/docker-compose.yaml --env-file .env up -d --no-deps webhook`, Compose reported the container as already `Running` and did nothing - the old, broken hooks were still loaded, with no new startup log line at all.
+
+**Gotcha:** Compose decides whether to recreate a container by hashing its *config* (image, env, command, the list of volume mounts) - not the contents of files a bind mount points at. `hooks.json` and `redeploy.sh` are bind-mounted read-only, so editing them on the host changes nothing Compose considers a config diff, and `up -d` becomes a silent no-op. `webhook` itself also only reads `hooks.json` once at process startup, so even the mount being "live" doesn't help.
+
+**Fix:** After changing a bind-mounted config file for a long-running service, force the container to actually restart: `docker restart <container>` or `docker compose up -d --force-recreate --no-deps <service>`.
+
+---
+
 ## OpenTelemetry and Observability
 
 ### Port 4317 is gRPC-only; sending HTTP/1.x traces there gives "malformed HTTP response"
