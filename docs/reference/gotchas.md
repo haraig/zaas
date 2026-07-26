@@ -72,6 +72,26 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### Caddy `try_files {path} /index.html` never resolves Astro's directory-format pages
+
+**Symptom:** Every page except the literal homepage (`/tools`, `/docs`, `/imprint`, etc.) returned `200 OK` but silently served the homepage's HTML instead of the requested page - no error, no redirect, no indication anything was wrong. `curl -sI` on any subpath showed identical `content-length` and body to `/`.
+
+**Gotcha:** Astro's default static build format writes every page as `<page>/index.html` (a directory), not `<page>.html`. `deploy/Caddyfile`'s SPA-style fallback was `try_files {path} /index.html`, which only checks two candidates: the literal request path (`/tools`), and the site-wide `/index.html` fallback. Neither candidate is the directory's own `index.html` file, so `try_files` never matches the real page and always falls through to serving the homepage - with a `200` status, since the fallback candidate genuinely exists. Requesting the exact file directly (`/tools/index.html`) worked correctly, which is what isolated the bug to the `try_files` candidate list rather than to `file_server`, permissions, or a bad build.
+
+**Fix:** Add the directory-index candidate explicitly: `try_files {path} {path}/index.html /index.html`.
+
+---
+
+### Docker Compose `wget`-based healthcheck fails against a `scratch` image
+
+**Symptom:** `deploy-api-1` showed `Up X minutes (unhealthy)` indefinitely in `docker ps`, with `docker logs deploy-api-1` producing no output at all, making the failure look like the app itself was silently crashing or hanging.
+
+**Gotcha:** `api/Dockerfile`'s runtime stage is `FROM scratch` - the image contains only the static binary, with no shell, no busybox, no `wget`. `deploy/docker-compose.yaml`'s healthcheck used `["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]`, which can never execute inside that image (`docker inspect --format='{{json .State.Health}}' <container>` shows `exec: "wget": executable file not found in $PATH`). The app itself was completely healthy the whole time (confirmed via `docker exec <caddy-container> wget -qO- http://api:8080/healthz`, since Caddy's image does have `wget`) - the healthcheck definition was simply incompatible with the target image and had been silently broken since it was introduced, since nothing in CI builds and health-checks the compose stack together. Separately, the empty `docker logs` output was unrelated and expected: `ZAAS_OTEL_ENABLED` defaults to `true`, which replaces the app's stdout `slog` handler with an OTel bridge that ships logs to the Collector/Loki instead of stdout.
+
+**Fix:** Removed the healthcheck from the `api` service. Nothing in the compose file actually consumed it (`caddy`'s `depends_on: api` has no `condition: service_healthy`), so it was purely cosmetic and misleading. A correct fix for a `scratch` image would require a self-check mode built into the Go binary itself (e.g. a `-healthcheck` flag) rather than shelling out to an external tool.
+
+---
+
 ### OTel Collector needs root to read Docker container logs
 
 

@@ -39,12 +39,6 @@ services:
         condition: service_healthy
       otel-collector:
         condition: service_started
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
 
   caddy:
     # In production, set ZAAS_WEB_IMAGE to the immutable digest output by the deploy workflow
