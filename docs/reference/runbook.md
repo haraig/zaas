@@ -150,6 +150,13 @@ sudo -u deploy sh -c '
 '
 ```
 
+Unlike the other services, `webhook` has no `image:` to pull - it's built locally from `deploy/webhook/Dockerfile`, so this first `up -d` also builds it (needs outbound network access for `apk add`). Confirm it built with the tools `redeploy.sh` needs:
+
+```bash
+docker exec deploy-webhook-1 git --version
+docker exec deploy-webhook-1 docker --version
+```
+
 Verify:
 
 ```bash

@@ -62,7 +62,9 @@ services:
       - otel-collector
 
   webhook:
-    image: almir/webhook:2.8.3@sha256:f77cc91c91d1527b48052280af38b50791e842ad8dd291e9b360a0c13c9ca991
+    build:
+      context: ./webhook
+    image: zaas-webhook:local
     restart: unless-stopped
     environment:
       DEPLOY_WEBHOOK_SECRET: "${DEPLOY_WEBHOOK_SECRET}"
@@ -71,7 +73,13 @@ services:
       - ./webhook/redeploy.sh:/scripts/redeploy.sh:ro
       - /opt/zaas:/opt/zaas
       - /var/run/docker.sock:/var/run/docker.sock
-    command: ["-hooks=/etc/webhook/hooks.json", "-verbose", "-port=9000"]
+    command:
+      [
+        "-hooks=/etc/webhook/hooks.json",
+        "-verbose",
+        "-template",
+        "-port=9000",
+      ]
     depends_on:
       - caddy
 

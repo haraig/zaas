@@ -238,6 +238,6 @@ Single Hetzner Cloud VPS running Docker Compose. Components:
 - **Web** - Astro static site built at image build time, served by Caddy
 - **PostgreSQL 16** - client/token storage, backups via GFS cron script
 - **Redis 7** - rate limit state (optional, only needed for multi-replica)
-- **Webhook** (almir/webhook) - listens for GitHub push events to trigger automated redeploy
+- **Webhook** - listens for GitHub push events to trigger automated redeploy. Built from `deploy/webhook/Dockerfile` (extends `almir/webhook` with `git` and the `docker` CLI, since `redeploy.sh` runs inside this container and the upstream image ships neither); `hooks.json` uses `webhook`'s `-template` mode to inject `DEPLOY_WEBHOOK_SECRET` from the container environment, so template placeholders must use unescaped quotes (`{{getenv "DEPLOY_WEBHOOK_SECRET"}}`), not JSON-escaped ones - see `docs/reference/gotchas.md`.
 
-Automated deploy: GitHub Actions builds and pushes the API image to GHCR on `main` push, then notifies the webhook endpoint which pulls the new image and restarts the service. See `docs/how-to/deploy.md` for setup details.
+Automated deploy: GitHub Actions builds and pushes the API image to GHCR on `main` push, then notifies the webhook endpoint which pulls the new image and restarts the service. See `docs/how-to/deploy.md` for setup details. Config-only changes to the webhook service itself (`hooks.json`, `redeploy.sh`, `deploy/webhook/Dockerfile`) are **not** picked up by this automated flow - `redeploy.sh` only recreates `api` and `caddy` - so they require a manual rebuild/restart of the `webhook` container on the server.
