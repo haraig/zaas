@@ -73,10 +73,6 @@ services:
       - ./webhook/redeploy.sh:/scripts/redeploy.sh:ro
       - /opt/zaas:/opt/zaas
       - /var/run/docker.sock:/var/run/docker.sock
-    # Grants the non-root "webhook" user access to the docker socket, which is
-    # group-owned by GID 1001 ("docker") on the host.
-    group_add:
-      - "1001"
     command:
       [
         "-hooks=/etc/webhook/hooks.json",
