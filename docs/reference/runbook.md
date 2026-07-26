@@ -31,6 +31,7 @@ Ad-hoc and ongoing procedures, looked up as needed.
 - [Releases](#releases)
 - [DMARC Policy Tightening](#dmarc-policy-tightening)
 - [Issuing an API Key on Request](#issuing-an-api-key-on-request)
+- [Accessing the API Container Directly](#accessing-the-api-container-directly)
 - [PostgreSQL: Manual Database Access](#postgresql-manual-database-access)
 - [Client Administration (SQL Reference)](#client-administration-sql-reference)
 
@@ -639,6 +640,28 @@ link.
 
 ---
 
+## Accessing the API Container Directly
+
+**Why:** The `api` service publishes no port to the host (unlike `caddy`, which
+publishes 80/443) - it's only reachable from other containers on the compose
+network. `curl http://localhost:8080/...` on the host will not work. The `api`
+image is also `FROM scratch` (no shell, no `wget`, no `curl`), so you cannot
+`docker exec` into it either. Reach it by execing into `caddy` instead, which
+is on the same network and has `curl` available:
+
+```bash
+# Call an endpoint directly, bypassing the domain and Caddy's routing rules
+docker exec deploy-caddy-1 curl -s http://api:8080/api/v1/dice
+
+# Open a shell to poke around further (sh, not bash - this is Alpine/BusyBox)
+docker exec -it deploy-caddy-1 sh
+```
+
+Useful when you want to rule out Caddy/DNS/TLS as the cause of a problem and
+confirm whether the API itself is behaving correctly.
+
+---
+
 ## PostgreSQL: Manual Database Access
 
 Connect to PostgreSQL:
@@ -795,8 +818,9 @@ docker logs deploy-api-1 --since 10m 2>&1 | tail -100
 # Check OOM kills in last hour
 dmesg -T | grep -i "killed process" | tail -20
 
-# Attempt a health check directly
-docker exec deploy-api-1 wget -qO- http://localhost:8080/healthz
+# Attempt a health check directly (the api image has no shell/wget of its own -
+# see "Accessing the API Container Directly" below)
+docker exec deploy-caddy-1 curl -s http://api:8080/healthz
 ```
 
 **Remediation:**
@@ -915,8 +939,9 @@ If a slow query is identified, run `EXPLAIN ANALYZE` and add an index if missing
 # In Grafana: Loki -> filter by http_response_status_code=429
 # Look for the source IP or client_id in the log fields.
 
-# Check the current rate limit configuration
-docker exec deploy-api-1 env | grep ZAAS_RATE_LIMIT
+# Check the current rate limit configuration (docker inspect reads container
+# metadata from the host - no exec into the scratch-based api image needed)
+docker inspect deploy-api-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ZAAS_RATE_LIMIT
 ```
 
 **Remediation:**
