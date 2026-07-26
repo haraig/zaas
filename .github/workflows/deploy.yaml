@@ -51,6 +51,7 @@ jobs:
         with:
           context: api
           push: true
+          provenance: false
           tags: |
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
             ${{ steps.meta.outputs.image }}:latest
@@ -66,6 +67,7 @@ jobs:
         with:
           context: web
           push: true
+          provenance: false
           tags: |
             ${{ steps.web-meta.outputs.image }}:${{ steps.web-meta.outputs.tag }}
             ${{ steps.web-meta.outputs.image }}:latest
