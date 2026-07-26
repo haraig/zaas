@@ -31,6 +31,7 @@ Ad-hoc and ongoing procedures, looked up as needed.
 - [Releases](#releases)
 - [DMARC Policy Tightening](#dmarc-policy-tightening)
 - [Issuing an API Key on Request](#issuing-an-api-key-on-request)
+- [Accessing the API Container Directly](#accessing-the-api-container-directly)
 - [PostgreSQL: Manual Database Access](#postgresql-manual-database-access)
 - [Client Administration (SQL Reference)](#client-administration-sql-reference)
 
@@ -388,8 +389,8 @@ sudo -u deploy sh -c '
 Verify PostgreSQL is healthy:
 
 ```bash
-docker exec zaas-postgres-1 pg_isready -U zaas
-# -> zaas-postgres-1:5432 - accepting connections
+docker exec deploy-postgres-1 pg_isready -U zaas
+# -> deploy-postgres-1:5432 - accepting connections
 ```
 
 ---
@@ -446,14 +447,14 @@ sudo -u deploy sh -c '
 Verify Redis is healthy:
 
 ```bash
-docker exec zaas-redis-1 redis-cli ping
+docker exec deploy-redis-1 redis-cli ping
 # -> PONG
 ```
 
 Verify the rate limiter is using Redis (check API logs):
 
 ```bash
-docker logs zaas-api-1 2>&1 | grep "rate limiter"
+docker logs deploy-api-1 2>&1 | grep "rate limiter"
 # -> ... redis rate limiter initialized url=redis://redis:6379 rpm=60
 ```
 
@@ -541,7 +542,7 @@ curl -s http://localhost:9100/metrics | grep "^node_cpu_seconds_total" | head -3
 # -> node_cpu_seconds_total{cpu="0",mode="idle"} ...
 
 # Confirm Prometheus can reach it (from inside the Prometheus container):
-docker exec zaas-prometheus-1 wget -qO- http://host.docker.internal:9100/metrics | head -5
+docker exec deploy-prometheus-1 wget -qO- http://host.docker.internal:9100/metrics | head -5
 # -> # HELP node_cpu_seconds_total ...
 
 # Check Prometheus targets page:
@@ -639,12 +640,34 @@ link.
 
 ---
 
+## Accessing the API Container Directly
+
+**Why:** The `api` service publishes no port to the host (unlike `caddy`, which
+publishes 80/443) - it's only reachable from other containers on the compose
+network. `curl http://localhost:8080/...` on the host will not work. The `api`
+image is also `FROM scratch` (no shell, no `wget`, no `curl`), so you cannot
+`docker exec` into it either. Reach it by execing into `caddy` instead, which
+is on the same network and has `curl` available:
+
+```bash
+# Call an endpoint directly, bypassing the domain and Caddy's routing rules
+docker exec deploy-caddy-1 curl -s http://api:8080/api/v1/dice
+
+# Open a shell to poke around further (sh, not bash - this is Alpine/BusyBox)
+docker exec -it deploy-caddy-1 sh
+```
+
+Useful when you want to rule out Caddy/DNS/TLS as the cause of a problem and
+confirm whether the API itself is behaving correctly.
+
+---
+
 ## PostgreSQL: Manual Database Access
 
 Connect to PostgreSQL:
 
 ```bash
-docker exec -it zaas-postgres-1 psql -U zaas -d zaas
+docker exec -it deploy-postgres-1 psql -U zaas -d zaas
 ```
 
 See [Client Administration](#client-administration-sql-reference) below for the full SQL reference.
@@ -658,7 +681,7 @@ Admin REST endpoints and a CLI are planned for a future release; until then, use
 **Connect to PostgreSQL:**
 
 ```bash
-docker exec -it zaas-postgres-1 psql -U zaas -d zaas
+docker exec -it deploy-postgres-1 psql -U zaas -d zaas
 ```
 
 **List all clients:**
@@ -689,7 +712,7 @@ SELECT * FROM clients WHERE api_key_prefix = 'zaas_a1b2';
 **View a client's current rate limit usage (Redis - run from Redis CLI):**
 
 ```bash
-docker exec -it zaas-redis-1 redis-cli
+docker exec -it deploy-redis-1 redis-cli
 > KEYS rate:client:*
 > ZCARD rate:client:<client-id>
 ```
@@ -762,7 +785,7 @@ When paged, run through these steps before diving into a specific alert playbook
    docker ps --format 'table {{.Names}}\t{{.Status}}'
    ```
 4. Check Caddy logs in Loki (Grafana -> Explore -> Loki, filter `service_name="caddy"`).
-5. Check API logs: `docker logs zaas-api-1 --since 15m 2>&1 | tail -50`
+5. Check API logs: `docker logs deploy-api-1 --since 15m 2>&1 | tail -50`
 6. Check PostgreSQL exporter target: Grafana -> Explore -> Prometheus, query `up{job="postgres"}`.
 7. Check Redis exporter target: query `up{job="redis"}`.
 8. If the Grafana dashboard shows no data at all, check the OTel Collector (see [ZaasCollectorDown](#zaas-collector-dropped-data)).
@@ -787,16 +810,17 @@ When paged, run through these steps before diving into a specific alert playbook
 
 ```bash
 # Check container status
-docker ps -a --filter name=zaas-api
+docker ps -a --filter name=deploy-api
 
 # Check recent logs
-docker logs zaas-api-1 --since 10m 2>&1 | tail -100
+docker logs deploy-api-1 --since 10m 2>&1 | tail -100
 
 # Check OOM kills in last hour
 dmesg -T | grep -i "killed process" | tail -20
 
-# Attempt a health check directly
-docker exec zaas-api-1 wget -qO- http://localhost:8080/healthz
+# Attempt a health check directly (the api image has no shell/wget of its own -
+# see "Accessing the API Container Directly" below)
+docker exec deploy-caddy-1 curl -s http://api:8080/healthz
 ```
 
 **Remediation:**
@@ -829,19 +853,19 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 
 ```bash
 # Find error log lines in the last 15 minutes
-docker logs zaas-api-1 --since 15m 2>&1 | grep '"level":"ERROR"'
+docker logs deploy-api-1 --since 15m 2>&1 | grep '"level":"ERROR"'
 
 # Check for panic stack traces
-docker logs zaas-api-1 --since 15m 2>&1 | grep -A 10 "panic"
+docker logs deploy-api-1 --since 15m 2>&1 | grep -A 10 "panic"
 
 # In Grafana: Explore -> Loki -> {service_name="zaas-api"} |= "ERROR"
 # Look for the http.route and error fields to isolate the failing endpoint.
 
 # Check database connectivity
-docker exec zaas-postgres-1 pg_isready -U zaas
+docker exec deploy-postgres-1 pg_isready -U zaas
 
 # Check Redis connectivity
-docker exec zaas-redis-1 redis-cli ping
+docker exec deploy-redis-1 redis-cli ping
 ```
 
 **Remediation:**
@@ -876,7 +900,7 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 docker stats --no-stream
 
 # Check slow Postgres queries (requires pg_stat_statements extension)
-docker exec -it zaas-postgres-1 psql -U zaas -d zaas -c "
+docker exec -it deploy-postgres-1 psql -U zaas -d zaas -c "
   SELECT query, calls, total_exec_time / calls AS avg_ms, rows
   FROM pg_stat_statements
   ORDER BY avg_ms DESC
@@ -884,7 +908,7 @@ docker exec -it zaas-postgres-1 psql -U zaas -d zaas -c "
 "
 
 # Check Redis slowlog
-docker exec zaas-redis-1 redis-cli SLOWLOG GET 10
+docker exec deploy-redis-1 redis-cli SLOWLOG GET 10
 
 # In Grafana: ZaaS Overview -> Request Duration p99 panel -> drill into http_route
 # to identify which endpoint is slow.
@@ -915,8 +939,9 @@ If a slow query is identified, run `EXPLAIN ANALYZE` and add an index if missing
 # In Grafana: Loki -> filter by http_response_status_code=429
 # Look for the source IP or client_id in the log fields.
 
-# Check the current rate limit configuration
-docker exec zaas-api-1 env | grep ZAAS_RATE_LIMIT
+# Check the current rate limit configuration (docker inspect reads container
+# metadata from the host - no exec into the scratch-based api image needed)
+docker inspect deploy-api-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ZAAS_RATE_LIMIT
 ```
 
 **Remediation:**
@@ -982,13 +1007,13 @@ ls -lt /var/backups/zaas/daily/
 
 ```bash
 # Check container status
-docker ps -a --filter name=zaas-postgres
+docker ps -a --filter name=deploy-postgres
 
 # Check PostgreSQL logs
-docker logs zaas-postgres-1 --since 10m 2>&1 | tail -50
+docker logs deploy-postgres-1 --since 10m 2>&1 | tail -50
 
 # Check if pg_isready responds
-docker exec zaas-postgres-1 pg_isready -U zaas
+docker exec deploy-postgres-1 pg_isready -U zaas
 ```
 
 **Remediation:**
@@ -1020,13 +1045,13 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 
 ```bash
 # Check container status
-docker ps -a --filter name=zaas-redis
+docker ps -a --filter name=deploy-redis
 
 # Check Redis logs
-docker logs zaas-redis-1 --since 10m 2>&1 | tail -50
+docker logs deploy-redis-1 --since 10m 2>&1 | tail -50
 
 # Attempt a direct ping
-docker exec zaas-redis-1 redis-cli ping
+docker exec deploy-redis-1 redis-cli ping
 ```
 
 **Remediation:**
@@ -1063,13 +1088,13 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 
 ```bash
 # Check Collector container status and logs
-docker ps -a --filter name=zaas-otel-collector
-docker logs zaas-otel-collector-1 --since 10m 2>&1 | tail -100
+docker ps -a --filter name=deploy-otel-collector
+docker logs deploy-otel-collector-1 --since 10m 2>&1 | tail -100
 
 # Check backend health
-docker ps -a --filter name=zaas-tempo
-docker ps -a --filter name=zaas-prometheus
-docker ps -a --filter name=zaas-loki
+docker ps -a --filter name=deploy-tempo
+docker ps -a --filter name=deploy-prometheus
+docker ps -a --filter name=deploy-loki
 
 # In Prometheus (if it is still up): check otelcol_* metrics
 # http://<server-ip>:9090/graph?g0.expr=otelcol_exporter_send_failed_spans_total
@@ -1109,21 +1134,21 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 ### Step 3: Drop and recreate the database
 
 ```bash
-docker exec -it zaas-postgres-1 psql -U zaas -d postgres -c "DROP DATABASE IF EXISTS zaas;"
-docker exec -it zaas-postgres-1 psql -U zaas -d postgres -c "CREATE DATABASE zaas;"
+docker exec -it deploy-postgres-1 psql -U zaas -d postgres -c "DROP DATABASE IF EXISTS zaas;"
+docker exec -it deploy-postgres-1 psql -U zaas -d postgres -c "CREATE DATABASE zaas;"
 ```
 
 ### Step 4: Restore from the backup
 
 ```bash
 gunzip -c /var/backups/zaas/daily/zaas-2026-05-31.sql.gz \
-  | docker exec -i zaas-postgres-1 psql -U zaas -d zaas
+  | docker exec -i deploy-postgres-1 psql -U zaas -d zaas
 ```
 
 ### Step 5: Verify the restore
 
 ```bash
-docker exec -it zaas-postgres-1 psql -U zaas -d zaas -c "SELECT COUNT(*) FROM clients;"
+docker exec -it deploy-postgres-1 psql -U zaas -d zaas -c "SELECT COUNT(*) FROM clients;"
 # Should return a non-zero count if clients existed before the failure.
 ```
 
@@ -1171,7 +1196,7 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 Check Collector logs for successful export confirmations:
 
 ```bash
-docker logs zaas-otel-collector-1 --since 2m 2>&1 | grep -i "export"
+docker logs deploy-otel-collector-1 --since 2m 2>&1 | grep -i "export"
 ```
 
 ### Step 4: Verify metrics are flowing
