@@ -46,7 +46,7 @@ make dev
 **2. Insert a test client with a known API key**
 
 ```bash
-docker exec -it zaas-postgres-1 psql -U zaas -d zaas -c "
+docker exec -it deploy-postgres-1 psql -U zaas -d zaas -c "
 INSERT INTO clients (email, display_name, api_key_hash, api_key_prefix, rate_limit_rpm, verified_at)
 VALUES (
   'local-test@example.com',
@@ -71,7 +71,7 @@ curl -H "Authorization: Bearer zaas_deadbeefdeadbeefdeadbeefdeadbeef" \
 **4. Watch the Redis sliding window counters**
 
 ```bash
-docker exec -it zaas-redis-1 redis-cli
+docker exec -it deploy-redis-1 redis-cli
 > KEYS rate:*
 > ZCARD rate:client:<uuid-from-db>
 ```
@@ -79,14 +79,14 @@ docker exec -it zaas-redis-1 redis-cli
 To get the client UUID:
 
 ```bash
-docker exec -it zaas-postgres-1 psql -U zaas -d zaas -c \
+docker exec -it deploy-postgres-1 psql -U zaas -d zaas -c \
   "SELECT id FROM clients WHERE email = 'local-test@example.com';"
 ```
 
 **5. Clean up**
 
 ```bash
-docker exec -it zaas-postgres-1 psql -U zaas -d zaas -c \
+docker exec -it deploy-postgres-1 psql -U zaas -d zaas -c \
   "DELETE FROM clients WHERE email = 'local-test@example.com';"
 ```
 
