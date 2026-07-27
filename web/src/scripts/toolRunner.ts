@@ -17,8 +17,8 @@ export interface RunToolOptions {
    */
   buildPath(): string;
   /**
-   * Renders the successful API response. Called only when res.ok is true.
-   * The container is shown automatically after this function returns.
+   * Renders the successful API response. Called only when res.ok is true,
+   * after the result container has already been unhidden.
    */
   renderResults(json: unknown): void;
 }
@@ -98,8 +98,12 @@ export function initToolRunner(options: RunToolOptions): void {
         return;
       }
 
-      options.renderResults(json);
+      // Unhide the container before rendering: renderResults may measure or
+      // initialize layout-dependent widgets (e.g. the Leaflet map on the
+      // coordinates tool), which compute the wrong size in a display:none
+      // container.
       resultContainer.classList.remove("hidden");
+      options.renderResults(json);
     } catch {
       showError("Failed to reach the API. Please try again.");
     } finally {
