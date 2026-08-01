@@ -127,6 +127,16 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### `webhook` container without `init: true` accumulates zombie processes
+
+**Symptom:** `sudo` login banner reported a growing number of zombie processes on the host (e.g. "There are 23 zombie processes."), with no crashing service and no visible error anywhere.
+
+**Gotcha:** The `webhook` service in `deploy/docker-compose.yaml` had no `init: true`, so the `webhook` Go binary itself ran as PID 1 inside its container. A plain binary running as PID 1 only reaps the direct children it explicitly forked - it does not reap arbitrary orphaned/reparented processes the way a real init system does. Every deploy trigger runs `redeploy.sh`, which chains `git pull`, `docker compose pull`, and `docker compose up -d` - each forking further subprocesses (git helpers, the docker CLI, credential helpers). Any subprocess that got orphaned mid-chain was reparented to PID 1 and never reaped, accumulating as a permanent zombie. Since Docker's PID namespace is visible from the host's root namespace, these zombies counted toward the host-wide count shown at SSH login, even though the process tree itself was entirely inside the `webhook` container.
+
+**Fix:** Add `init: true` to the `webhook` service in `deploy/docker-compose.yaml`. This makes Docker insert `tini` as the container's actual PID 1, which correctly reaps orphaned descendants. Apply on the server with `docker compose -f deploy/docker-compose.yaml --env-file .env up -d --no-deps webhook` (recreates only that container, matching the "config-only diff" rule from the entry above).
+
+---
+
 ## OpenTelemetry and Observability
 
 ### Port 4317 is gRPC-only; sending HTTP/1.x traces there gives "malformed HTTP response"
