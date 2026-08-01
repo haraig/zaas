@@ -484,11 +484,11 @@ Node Exporter exposes host-level metrics (CPU, memory, disk, network, filesystem
 ```bash
 # Download latest stable release
 NODE_EXPORTER_VERSION="1.9.1"
-wget "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz" \
-  -O /tmp/node_exporter.tar.gz
+curl -L "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz" \
+  -o /tmp/node_exporter.tar.gz
 
 tar -xzf /tmp/node_exporter.tar.gz -C /tmp/
-install -m 755 /tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin/node_exporter
+sudo install -m 755 /tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin/node_exporter
 rm -rf /tmp/node_exporter*
 ```
 
