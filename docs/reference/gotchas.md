@@ -160,6 +160,19 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### Grafana's Goroutines/Memory/GC panels and Collector Health panels showed permanent "No data"
+
+**Symptom:** On the default Grafana dashboard (`deploy/grafana/provisioning/dashboards/zaas-overview.json`), the Goroutines, Memory Usage, and GC Pause Duration panels, plus all four panels under Collector Health, always showed "No data" - not intermittently, on every load, regardless of how long the stack had been running.
+
+**Gotcha:** Two independent causes, both scrape-target problems rather than "nothing happened yet":
+
+1. The Goroutines/Memory/GC panels query `go_goroutines`, `go_memstats_alloc_bytes`, `go_memstats_sys_bytes`, and `go_gc_duration_seconds_sum` on `job="zaas-api"`. Prometheus scrapes `api:8080/metrics` successfully, but `api/internal/telemetry/telemetry.go` builds that endpoint from a fresh `prometheus.NewRegistry()` and only registers the OTel-to-Prometheus bridge exporter. Unlike `prometheus.DefaultRegisterer`, a fresh registry does not auto-include Go runtime or process metrics - `collectors.NewGoCollector()` and `collectors.NewProcessCollector()` must be registered explicitly, and nothing did. The metric names simply never existed in the scrape output.
+2. The Collector Health panels query `otelcol_*` and `process_resident_memory_bytes{job="otel-collector"}`, scraped from `otel-collector:8888` (`deploy/prometheus.yaml`). The OTel Collector's self-telemetry Prometheus reader defaults to binding `localhost:8888` inside its own container. Prometheus runs in a sibling container and reaches it via the Docker DNS name `otel-collector`, which resolves to the container's external interface, not loopback - so every scrape of that target failed silently (target down), and none of the four panels ever had data.
+
+**Fix:** In `telemetry.go`, register `collectors.NewGoCollector()` and `collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})` on the same `promReg` used by the OTel bridge exporter. In `deploy/otel-collector.yaml`, add an explicit `service.telemetry.metrics.readers` pull exporter with `host: 0.0.0.0` (not the default `localhost`) so the self-telemetry endpoint is reachable from other containers.
+
+---
+
 ### The `loki` exporter was silently removed from OTel Collector contrib
 
 
