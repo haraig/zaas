@@ -16,7 +16,7 @@ variable "server_type" {
 variable "image" {
   type        = string
   description = "Hetzner server image"
-  default     = "docker-ce"
+  default     = "ubuntu-26.04"
 }
 
 variable "location" {

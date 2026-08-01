@@ -28,6 +28,7 @@ Follow these steps in order when setting up a new server from scratch.
 
 Ad-hoc and ongoing procedures, looked up as needed.
 
+- [Restarting the Server](#restarting-the-server)
 - [Releases](#releases)
 - [DMARC Policy Tightening](#dmarc-policy-tightening)
 - [Issuing an API Key on Request](#issuing-an-api-key-on-request)
@@ -99,7 +100,7 @@ make infra-apply
 
 **Source:** `docs/how-to/deploy.md`
 
-The server image (`docker-ce`) already has Docker installed and running. Cloud-init runs `package_update` and `package_upgrade` on first boot, and disables root login. SSH in as the configured user on the custom SSH port (default: `2222`):
+The server is provisioned from the `ubuntu-26.04` image. Cloud-init (`infra/tofu/modules/hcloud_server/user_data.yaml.tftpl`) installs Docker from the official Docker CE apt repository, runs `package_update` and `package_upgrade`, disables root login, and reboots once provisioning finishes. SSH in as the configured user on the custom SSH port (default: `2222`):
 
 ```bash
 ssh -p 2222 <user_name>@<server-ip>
@@ -571,6 +572,40 @@ sudo ufw deny 9100/tcp
 ---
 
 # Part 2: Operational Procedures
+
+## Restarting the Server
+
+**When:** Applying kernel updates, recovering from a hung host, or any other situation requiring a full reboot.
+
+Reboot from inside the OS so services get a chance to shut down cleanly, rather than using a Hetzner Cloud Console power cycle:
+
+```bash
+ssh -p 2222 <user_name>@<server-ip>
+sudo reboot
+```
+
+No manual startup steps are needed afterward: every service in `deploy/docker-compose.yaml` runs with `restart: unless-stopped`, so Docker brings the full stack back up once the daemon starts. `node_exporter` and `zaas-backup.timer` are enabled systemd services (see sections 9 and 11) and start automatically as well.
+
+**Verify everything came back up:**
+
+```bash
+# Wait for SSH to come back, then check container status
+ssh -p 2222 <user_name>@<server-ip>
+docker ps --format 'table {{.Names}}\t{{.Status}}'
+# -> all containers should show "Up"
+
+# Check the host-level systemd services
+systemctl status node_exporter zaas-backup.timer
+# -> both should show "active"
+
+# Check the API responds
+curl https://zaas.at/healthz
+# -> {"status":"ok"}
+```
+
+If any container isn't `Up`, check its logs (`docker logs <container-name> --since 5m`) - see the [First Response Checklist](#first-response-checklist) and the relevant alert playbook below.
+
+---
 
 ## Releases
 
