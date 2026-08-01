@@ -539,7 +539,24 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now node_exporter
 ```
 
-### 11.5 Verify
+### 11.5 Allow the Docker bridge network through the firewall
+
+Node Exporter binds to all interfaces by default. UFW is enabled by cloud-init, which only opens ports 22, 80, and 443 - port 9100 is blocked by default, including for the Prometheus container.
+
+`host.docker.internal` (configured via `extra_hosts: host-gateway` in `deploy/docker-compose.yaml`) resolves to the host's own bridge-gateway IP, so a scrape from the `prometheus` container is host-destined traffic that hits UFW's INPUT chain like any other incoming connection. This is not exempt the way container-to-container or published-port traffic is via the FORWARD chain. Without an explicit allow rule, UFW silently drops the connection instead of refusing it, which shows up as a hang rather than an immediate error.
+
+Allow port 9100 only from the Docker bridge subnet used by the compose stack, not the whole internet:
+
+```bash
+docker network inspect deploy_default | grep Subnet
+# e.g. "Subnet": "172.20.0.0/16"
+
+sudo ufw allow from <bridge-subnet> to any port 9100 proto tcp comment 'node_exporter for prometheus container'
+```
+
+This rule is required permanently, not just for the verification step below - Prometheus scrapes this endpoint on every scrape interval (`deploy/prometheus.yaml`).
+
+### 11.6 Verify
 
 ```bash
 systemctl status node_exporter
@@ -555,18 +572,6 @@ docker exec deploy-prometheus-1 wget -qO- http://host.docker.internal:9100/metri
 
 # Check Prometheus targets page:
 # http://<server-ip>:9090/targets  ->  node-exporter job should show "UP"
-```
-
-### 11.6 Firewall note
-
-Node Exporter binds to all interfaces by default. UFW is enabled by cloud-init; ensure port 9100 is not exposed externally - it only needs to be reachable from the Docker bridge network:
-
-```bash
-ufw status
-# If port 9100 would be open to the internet, restrict it:
-sudo ufw deny 9100/tcp
-# The Docker bridge network bypasses UFW via iptables, so Prometheus can
-# still reach the host on host.docker.internal:9100.
 ```
 
 ---

@@ -50,6 +50,16 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### UFW's INPUT chain still filters container traffic addressed to `host.docker.internal`
+
+**Symptom:** `docker exec deploy-prometheus-1 wget -qO- http://host.docker.internal:9100/metrics` hung indefinitely with no output, and the `node-exporter` Prometheus target stayed unreachable, even though `node_exporter` was running and `curl http://localhost:9100/metrics` worked fine directly on the host.
+
+**Gotcha:** `deploy/docker-compose.yaml`'s `extra_hosts: host.docker.internal:host-gateway` resolves to the host's own bridge-gateway IP, so a request from a container to `host.docker.internal` is host-destined traffic that hits UFW's INPUT chain like any other incoming connection. It is easy to assume Docker's iptables manipulation exempts this the way it does for container-to-container traffic or published ports via the FORWARD chain - it does not. Cloud-init's UFW setup only opens ports 22, 80, and 443, so the scrape was silently dropped rather than refused, producing a hang (no RST) instead of an instant "connection refused" - a strong tell that a firewall, not the application, is the cause.
+
+**Fix:** Explicitly allow the port from the Docker bridge subnet: `sudo ufw allow from <bridge-subnet> to any port 9100 proto tcp` (find the subnet with `docker network inspect <project>_default`). Scope the source to the bridge subnet, not the internet at large. The rule is required permanently, not just for one-off testing - Prometheus scrapes the same path on every scrape interval. To remove a rule added with the wrong subnet, either repeat the exact spec with `delete` prepended (`sudo ufw delete allow from <subnet> to any port 9100 proto tcp`; the comment is not part of the match), or find it with `sudo ufw status numbered` and run `sudo ufw delete <number>`.
+
+---
+
 ### Hardcoded credentials in Docker Compose default values end up in version control
 
 
