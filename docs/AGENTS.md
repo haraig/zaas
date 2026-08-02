@@ -62,7 +62,7 @@ Accurate technical descriptions. No instructions.
 | [reference/openapi.yaml](reference/openapi.yaml) | OpenAPI 3.0.3 spec - the contractual source of truth for the API |
 | [reference/architecture.md](reference/architecture.md) | Package layout, code generation, rate limiting, auth, database, email |
 | [reference/observability.md](reference/observability.md) | Tool inventory, architecture diagram, communication ports, Grafana wiring, data storage |
-| [reference/runbook.md](reference/runbook.md) | Manual operational procedures: infra setup, email, PostgreSQL, Redis, releases, node exporter |
+| [reference/runbook.md](reference/runbook.md) | Manual operational procedures: infra setup, email, PostgreSQL, Redis, releases, node exporter, backups and restores |
 | [reference/gotchas.md](reference/gotchas.md) | Non-obvious pitfalls and bugs encountered in development |
 | [reference/errors/invalid-param.md](reference/errors/invalid-param.md) | INVALID_PARAM error code reference (RFC 9457 type URI) |
 | [reference/errors/rate-limited.md](reference/errors/rate-limited.md) | RATE_LIMITED error code reference (RFC 9457 type URI) |

@@ -210,7 +210,18 @@ Hot-path index: `clients(api_key_hash)` - looked up on every authenticated reque
 | `expires_at` | `timestamptz` | 24h from creation |
 | `used_at` | `timestamptz` | NULL until consumed |
 
-**Backups:** GFS (Grandfather-Father-Son) rotation via `deploy/scripts/backup-postgres.sh` (cron on the host). Retains 7 daily, 4 weekly, 6 monthly backups in `/var/backups/zaas/`. See `docs/reference/runbook.md` for setup and SQL maintenance reference.
+**Backups:** two daily systemd timers on the host, both using GFS (Grandfather-Father-Son) rotation and retaining 7 daily, 4 weekly, 6 monthly copies:
+
+| Timer | Script | Covers | Location |
+| ----- | ------ | ------ | -------- |
+| `zaas-backup.timer` (03:00) | `deploy/scripts/backup-postgres.sh` | `pg_dump` of the `zaas` database | `/var/backups/zaas/` |
+| `zaas-backup-volumes.timer` (03:30) | `deploy/scripts/backup-volumes.sh` | `caddy_data`, `grafana_data`, `alertmanager_data` | `/var/backups/zaas/volumes/` |
+
+`postgres_data` is excluded from the volume backup because a file-level copy of a running data directory is not crash-consistent; the logical `pg_dump` covers it instead. `redis_data` (ephemeral rate-limit counters) and the retention-capped telemetry volumes are excluded too. Within `grafana_data`, `./plugins` is excluded as well: it holds ~85 MB of Grafana's default plugin set, which Grafana's background installer re-downloads on startup. What the backup exists for is `grafana.db` (~1.5 MB), and Grafana is stopped for the few seconds its archive is written because that file is live SQLite.
+
+Both units report their outcome via `deploy/scripts/backup-metrics.sh`, which writes `zaas_backup_*` gauges to the node_exporter textfile collector. These drive the `ZaasBackupFailed`, `ZaasBackupStale` and `ZaasBackupMetricsMissing` alerts in `deploy/prometheus.rules.yaml`.
+
+Offsite copies are pulled by a separate machine over SSH using a key confined to reading `/var/backups/zaas` by an `rrsync` forced command, so the ZaaS server holds no outbound credentials. See `docs/reference/runbook.md` for setup, restore, and SQL maintenance reference.
 
 ## Email
 
@@ -236,8 +247,8 @@ Single Hetzner Cloud VPS running Docker Compose. Components:
 - **Caddy** - TLS termination (automatic Let's Encrypt), reverse proxy to API (`/api/*`), serves Astro static files for all other routes
 - **API** - Go binary in a distroless container
 - **Web** - Astro static site built at image build time, served by Caddy
-- **PostgreSQL 16** - client/token storage, backups via GFS cron script
-- **Redis 7** - rate limit state (optional, only needed for multi-replica)
+- **PostgreSQL 18** - client/token storage, backups via GFS systemd timer
+- **Redis 8** - rate limit state (optional, only needed for multi-replica)
 - **Webhook** - listens for GitHub push events to trigger automated redeploy. Built from `deploy/webhook/Dockerfile` (extends `almir/webhook` with `git` and the `docker` CLI, since `redeploy.sh` runs inside this container and the upstream image ships neither); `hooks.json` uses `webhook`'s `-template` mode to inject `DEPLOY_WEBHOOK_SECRET` from the container environment, so template placeholders must use unescaped quotes (`{{getenv "DEPLOY_WEBHOOK_SECRET"}}`), not JSON-escaped ones - see `docs/reference/gotchas.md`.
 
 Automated deploy: GitHub Actions builds and pushes the API image to GHCR on `main` push, then notifies the webhook endpoint which pulls the new image and restarts the service. See `docs/how-to/deploy.md` for setup details. Config-only changes to the webhook service itself (`hooks.json`, `redeploy.sh`, `deploy/webhook/Dockerfile`) are **not** picked up by this automated flow - `redeploy.sh` only recreates `api` and `caddy` - so they require a manual rebuild/restart of the `webhook` container on the server.

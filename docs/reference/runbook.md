@@ -20,9 +20,10 @@ Follow these steps in order when setting up a new server from scratch.
 6. [Email: Production .env Configuration](#6-email-production-env-configuration)
 7. [Email: End-to-End Verification](#7-email-end-to-end-verification)
 8. [PostgreSQL: Production .env Configuration](#8-postgresql-production-env-configuration)
-9. [PostgreSQL: Backup Timer Activation](#9-postgresql-backup-timer-activation)
+9. [Backups: Timers and Metrics](#9-backups-timers-and-metrics)
 10. [Redis: Production .env Configuration](#10-redis-production-env-configuration)
 11. [Node Exporter: Host Metrics](#11-node-exporter-host-metrics)
+12. [Offsite Backups: Read-Only Reader Account](#12-offsite-backups-read-only-reader-account)
 
 ### Part 2: Operational Procedures
 
@@ -35,6 +36,7 @@ Ad-hoc and ongoing procedures, looked up as needed.
 - [Accessing the API Container Directly](#accessing-the-api-container-directly)
 - [PostgreSQL: Manual Database Access](#postgresql-manual-database-access)
 - [Client Administration (SQL Reference)](#client-administration-sql-reference)
+- [Offsite Backups: Manual Pull](#offsite-backups-manual-pull)
 
 ### Part 3: Alert Playbooks
 
@@ -49,7 +51,10 @@ Procedures for responding to Prometheus alerts. Each section corresponds to an a
 - [ZaasPostgresDown](#zaas-postgres-down)
 - [ZaasRedisDown](#zaas-redis-down)
 - [ZaasCollectorDroppedSpans / ZaasCollectorDroppedMetrics / ZaasCollectorDroppedLogs / ZaasCollectorDown](#zaas-collector-dropped-data)
+- [ZaasBackupFailed / ZaasBackupStale / ZaasBackupMetricsMissing](#zaas-backup-stale)
 - [PostgreSQL: Restore from pg_dump](#postgresql-restore-from-pg_dump)
+- [Docker Volumes: Restore from tar backup](#docker-volumes-restore-from-tar-backup)
+- [Full Server Loss: Rebuild from Offsite](#full-server-loss-rebuild-from-offsite)
 - [Observability Stack Bootstrap (data loss)](#observability-stack-bootstrap-data-loss)
 
 ---
@@ -403,35 +408,93 @@ docker exec deploy-postgres-1 pg_isready -U zaas
 
 ---
 
-## 9. PostgreSQL: Backup Timer Activation
+## 9. Backups: Timers and Metrics
 
-### 9.1 Create backup directory
+Two daily backups run on the host, each with its own systemd timer:
+
+| Timer | Runs | Covers |
+| ----- | ---- | ------ |
+| `zaas-backup.timer` | 03:00 | `pg_dump` of the `zaas` database -> `/var/backups/zaas/{daily,weekly,monthly}/` |
+| `zaas-backup-volumes.timer` | 03:30 | tar archives of `caddy_data`, `grafana_data`, `alertmanager_data` -> `/var/backups/zaas/volumes/{daily,weekly,monthly}/` |
+
+The volume run stops Grafana for a few seconds, because `grafana.db` is live SQLite and a hot tar can capture a torn write. `caddy_data` and `alertmanager_data` are written atomically and are tarred while running. Grafana's `./plugins` directory is excluded (~85 MB of re-downloadable plugin code), which keeps the whole volume set under a megabyte per day.
+
+Both use Grandfather-Father-Son rotation (7 daily, 4 weekly, 6 monthly) and both report
+their outcome as a Prometheus metric through the node_exporter textfile collector, which
+drives the `ZaasBackupFailed` / `ZaasBackupStale` / `ZaasBackupMetricsMissing` alerts.
+
+`postgres_data` is deliberately not in the volume backup: a file-level copy of a running
+data directory is not crash-consistent, so the logical `pg_dump` is the right tool for it.
+`redis_data` (ephemeral rate-limit counters) and the telemetry volumes (`prometheus_data`,
+`loki_data`, `tempo_data`) are excluded as well.
+
+### 9.1 Create the backup and metrics directories
 
 ```bash
-sudo mkdir -p /var/backups/zaas
-sudo chown deploy:deploy /var/backups/zaas
+# 0750, not the mkdir default of 0755: the dumps contain hashed API keys, and the
+# offsite reader account (section 12) gets in through group-read on this directory.
+sudo install -d -o deploy -g deploy -m 0750 /var/backups/zaas
+
+# Textfile collector drop directory. Owned by deploy because the backup units write
+# here; world-readable because node_exporter reads it as a different user and these
+# files hold timestamps and byte counts, nothing sensitive.
+sudo install -d -o deploy -g deploy -m 0755 /var/lib/node_exporter/textfile_collector
 ```
 
-### 9.2 Install and enable the systemd timer
+### 9.2 Pre-pull the tar helper image
+
+The volume backup tars each volume through a throwaway container. Pulling it once now
+means the 03:30 run does not depend on the network:
+
+```bash
+sudo -u deploy docker pull debian:13-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd
+```
+
+Keep this digest in sync with `TAR_IMAGE` in `/opt/zaas/deploy/scripts/backup-volumes.sh`.
+
+### 9.3 Install and enable the systemd timers
 
 ```bash
 sudo cp /opt/zaas/deploy/scripts/zaas-backup.service /etc/systemd/system/
 sudo cp /opt/zaas/deploy/scripts/zaas-backup.timer /etc/systemd/system/
+sudo cp /opt/zaas/deploy/scripts/zaas-backup-volumes.service /etc/systemd/system/
+sudo cp /opt/zaas/deploy/scripts/zaas-backup-volumes.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now zaas-backup.timer
+sudo systemctl enable --now zaas-backup.timer zaas-backup-volumes.timer
 ```
 
-### 9.3 Verify
+> The scripts themselves arrive with `git pull` (the sparse checkout of `deploy/` into
+> `/opt/zaas`), so editing a script needs no copy step. The **unit files** do: a changed
+> `.service` or `.timer` has to be re-copied and `daemon-reload`ed by hand.
+
+### 9.4 Verify
 
 ```bash
-systemctl status zaas-backup.timer
-# -> Active: active (waiting)
+systemctl list-timers 'zaas-backup*'
+# -> both timers listed with a NEXT elapse
 
-# Test a manual run:
+# Test a manual run of each. The volume backup stops Grafana for a few seconds.
 sudo systemctl start zaas-backup.service
-journalctl -u zaas-backup.service --no-pager -n 20
-ls -la /var/backups/zaas/daily/
+sudo systemctl start zaas-backup-volumes.service
+
+journalctl -u zaas-backup.service -u zaas-backup-volumes.service --no-pager -n 40
+
+ls -la /var/backups/zaas/daily/          # -> zaas-<date>.sql.gz, mode 0640
+ls -la /var/backups/zaas/volumes/daily/  # -> three deploy_*-<date>.tar.gz, mode 0640
 ```
+
+Confirm the metrics were written and that no `.tmp` files were left behind:
+
+```bash
+cat /var/lib/node_exporter/textfile_collector/zaas-backup-*.prom
+# -> zaas_backup_last_run_success{backup="postgres"} 1
+#    zaas_backup_last_run_success{backup="volumes"} 1
+
+ls /var/backups/zaas/daily/*.tmp /var/backups/zaas/volumes/daily/*.tmp 2>/dev/null
+# -> no such file (expected)
+```
+
+The metrics only reach Prometheus once the textfile collector is enabled in section 11.
 
 ---
 
@@ -521,6 +584,8 @@ ExecStart=/usr/local/bin/node_exporter \
   --collector.uname \
   --collector.time \
   --collector.stat \
+  --collector.textfile \
+  --collector.textfile.directory=/var/lib/node_exporter/textfile_collector \
   --web.listen-address=:9100
 Restart=on-failure
 RestartSec=5s
@@ -531,6 +596,8 @@ EOF
 ```
 
 > **Why `--collector.disable-defaults` with explicit collectors?** This avoids hundreds of low-value metrics (systemd units, NFS, hardware sensors, etc.) and keeps Prometheus cardinality low. The selected collectors cover all the metrics used by the Grafana dashboard.
+>
+> `--collector.textfile` is on the list because the backup timers (section 9) report their outcome by dropping `.prom` files into the directory below - that is what feeds the `ZaasBackupStale` alert. Because defaults are disabled, **both** flags are required: `--collector.textfile.directory` on its own does not enable the collector.
 
 ### 11.4 Enable and start
 
@@ -573,6 +640,131 @@ docker exec deploy-prometheus-1 wget -qO- http://host.docker.internal:9100/metri
 # Check Prometheus targets page:
 # http://<server-ip>:9090/targets  ->  node-exporter job should show "UP"
 ```
+
+Confirm the textfile collector picked up the backup metrics (requires section 9):
+
+```bash
+curl -s http://localhost:9100/metrics | grep -E '^(zaas_backup|node_textfile_scrape_error)'
+# -> node_textfile_scrape_error 0
+#    zaas_backup_last_success_timestamp_seconds{backup="postgres"} ...
+```
+
+`node_textfile_scrape_error 1` means a `.prom` file failed to parse, in which case
+node_exporter drops **all** textfile metrics, not just the bad one.
+
+---
+
+## 12. Offsite Backups: Read-Only Reader Account
+
+Backups live on the same disk as the data they protect, so a lost server loses both. This
+section sets up a dedicated account that a second machine you control uses to **pull**
+`/var/backups/zaas` over SSH. The direction matters: the ZaaS server holds no outbound
+credentials and cannot reach, modify or delete the offsite copies.
+
+```
+backup-server                     zaas-server
+     |  ssh -i ~/.ssh/zaas_backup ----->|  authorized_keys:
+     |                                  |   restrict,command="/usr/bin/rrsync -ro /var/backups/zaas"
+     |<---------- files (read-only) ----|
+```
+
+### 12.1 Generate a key pair on the backup server
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/zaas_backup -C "zaas offsite backup reader"
+```
+
+### 12.2 Create the reader account on the ZaaS server
+
+```bash
+# Dedicated, non-sudo account. The shell must be a real one: sshd runs forced
+# commands through the login shell, so /usr/sbin/nologin would break the forced
+# command below.
+sudo useradd -r -m -s /bin/bash zaasbackup
+
+# Group membership is what grants read access to /var/backups/zaas (mode 0750).
+sudo usermod -aG deploy zaasbackup
+```
+
+### 12.3 Allow the new user through the SSH hardening config
+
+Cloud-init writes `/etc/ssh/sshd_config.d/ssh-hardening.conf` containing
+`AllowUsers deploy`. Until the new user is listed there too, sshd rejects it **before**
+authentication is attempted, reporting a misleading `Permission denied (publickey)`.
+
+Add a separate drop-in rather than editing the cloud-init-managed file, which would be
+rewritten on a server rebuild:
+
+```bash
+sudo tee /etc/ssh/sshd_config.d/zz-backup-reader.conf > /dev/null << 'EOF'
+AllowUsers deploy zaasbackup
+EOF
+```
+
+`AllowUsers` is first-match-wins across the merged config and drop-ins are read in lexical
+order, hence the `zz-` prefix so this file is parsed after `ssh-hardening.conf`.
+
+Verify before restarting, and **keep an existing SSH session open** while you do:
+
+```bash
+sudo sshd -T | grep allowusers
+# -> allowusers deploy zaasbackup
+
+sudo systemctl restart ssh
+```
+
+### 12.4 Install the key with a forced command
+
+Paste the **public** key from step 12.1 into the reader's `authorized_keys`, prefixed with
+the restrictions:
+
+```bash
+sudo -u zaasbackup mkdir -p /home/zaasbackup/.ssh
+sudo -u zaasbackup chmod 700 /home/zaasbackup/.ssh
+sudo -u zaasbackup tee /home/zaasbackup/.ssh/authorized_keys > /dev/null << 'EOF'
+restrict,command="/usr/bin/rrsync -ro /var/backups/zaas" ssh-ed25519 AAAA... zaas offsite backup reader
+EOF
+sudo -u zaasbackup chmod 600 /home/zaasbackup/.ssh/authorized_keys
+```
+
+`restrict` disables port/agent/X11 forwarding, pty allocation and user-rc. `rrsync -ro`
+locks the session to that one directory and refuses any write, delete or rename.
+
+Confirm `rrsync` is where the forced command expects it:
+
+```bash
+ls -l /usr/bin/rrsync
+# rsync >= 3.2.4 ships it here; older layouts put it in /usr/share/doc/rsync/scripts/
+```
+
+No firewall change is needed - `ufw limit <ssh_port>` already permits SSH.
+
+### 12.5 Verify the key really is confined
+
+From the backup server. All three must **fail**:
+
+```bash
+# No interactive shell
+ssh -p 2222 -i ~/.ssh/zaas_backup zaasbackup@<server-ip>
+
+# Forced command ignores whatever is requested
+ssh -p 2222 -i ~/.ssh/zaas_backup zaasbackup@<server-ip> "cat /etc/passwd"
+
+# Writes are refused
+rsync -av -e "ssh -p 2222 -i ~/.ssh/zaas_backup" ./anyfile zaasbackup@<server-ip>:/
+```
+
+And this must **succeed**:
+
+```bash
+rsync -n -av -e "ssh -p 2222 -i ~/.ssh/zaas_backup" zaasbackup@<server-ip>:/ /tmp/probe/
+# -> lists daily/, weekly/, monthly/, volumes/
+```
+
+Note the source path is `:/`. With `rrsync` the remote path is relative to the locked root,
+so `/` here means `/var/backups/zaas`; an absolute host path fails.
+
+Then set up the pull itself - see [Offsite Backups: Manual Pull](#offsite-backups-manual-pull).
 
 ---
 
@@ -816,6 +1008,57 @@ FROM clients;
 
 ---
 
+## Offsite Backups: Manual Pull
+
+Run **on the backup server**, not on the ZaaS server. Requires the reader account from
+section 12.
+
+The script is `deploy/scripts/pull-backups.sh` from this repository. It is checked in here
+for version control; copy it to the backup server (or clone the repo there) and run it from
+that machine.
+
+### One-time setup on the backup server
+
+Pin the ZaaS server's host key so a silent host-key swap cannot go unnoticed - an
+occasional manual command is exactly the case where it would:
+
+```bash
+ssh-keyscan -p 2222 <server-ip> >> ~/.ssh/known_hosts
+```
+
+### Pulling
+
+```bash
+export ZAAS_BACKUP_HOST=<server-ip>
+./pull-backups.sh
+```
+
+Defaults, all overridable by environment variable:
+
+| Variable | Default |
+| -------- | ------- |
+| `ZAAS_BACKUP_USER` | `zaasbackup` |
+| `ZAAS_BACKUP_PORT` | `2222` |
+| `ZAAS_BACKUP_KEY` | `~/.ssh/zaas_backup` |
+| `ZAAS_BACKUP_DEST` | `/var/backups/zaas-offsite` |
+
+The pull deliberately does **not** pass `--delete`: source-side GFS rotation would
+otherwise propagate here and delete exactly the history this copy exists to preserve. The
+offsite copy therefore grows by a few MB plus one SQL dump per pull - prune it by hand if
+it ever matters.
+
+### Verify a pulled archive matches the source
+
+```bash
+# On the backup server
+sha256sum /var/backups/zaas-offsite/daily/zaas-<date>.sql.gz
+
+# On the ZaaS server
+sha256sum /var/backups/zaas/daily/zaas-<date>.sql.gz
+```
+
+---
+
 # Part 3: Alert Playbooks
 
 This part documents the response procedure for each Prometheus alert defined in `deploy/prometheus.rules.yaml`. Alert notifications are delivered via Alertmanager (configured in `deploy/alertmanager.yaml`). The Alertmanager UI is at `http://<server-ip>:9093`.
@@ -1009,6 +1252,7 @@ If abuse is confirmed, block the IP at the Caddy or UFW level. If a legitimate c
 - Docker image and container layer accumulation.
 - Log accumulation.
 - Prometheus or Loki storage growth (both now have persistent volumes).
+- Backup rotation not running, so dumps and volume archives accumulate.
 
 **Diagnostic steps:**
 
@@ -1016,7 +1260,7 @@ If abuse is confirmed, block the IP at the Caddy or UFW level. If a legitimate c
 # Find largest consumers
 df -h /
 du -sh /var/lib/docker/*
-du -sh /var/backups/zaas/
+du -sh /var/backups/zaas/ /var/backups/zaas/volumes/
 
 # Check Docker disk usage
 docker system df
@@ -1028,8 +1272,9 @@ docker system df
 # Remove unused Docker images and containers
 docker system prune -f
 
-# Remove old backup files (keep at least 7 days)
-ls -lt /var/backups/zaas/daily/
+# Remove old backup files (keep at least 7 days). Both backup sets rotate on their
+# own; only step in here if rotation has fallen behind.
+ls -lt /var/backups/zaas/daily/ /var/backups/zaas/volumes/daily/
 # rm files older than 7 days manually after confirming
 
 # If Prometheus storage is the cause, reduce retention:
@@ -1159,6 +1404,70 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 
 ---
 
+## ZaasBackupStale
+
+Covers `ZaasBackupFailed`, `ZaasBackupStale` and `ZaasBackupMetricsMissing`.
+
+**Severity:** warning (run failed, metrics missing), critical (no success in > 26h)
+**Condition:** A daily backup did not succeed, or its metric is gone entirely.
+
+**Symptom:** The backup that a restore would depend on is not being produced. Nothing is
+broken in production yet - this alert exists so a bad restore is not the first sign.
+
+**Likely causes:**
+- The backup script failed: PostgreSQL container down, Docker unavailable, disk full.
+- The timer is disabled or was never enabled (`ZaasBackupMetricsMissing`).
+- The unit files were changed in git but never re-copied to `/etc/systemd/system/`.
+- The node_exporter textfile collector is not enabled, or a `.prom` file failed to parse -
+  in which case node_exporter drops **all** textfile metrics, not just the bad one.
+
+**Diagnostic steps:**
+
+```bash
+# Did the timers run, and are they still armed?
+systemctl list-timers 'zaas-backup*'
+systemctl status zaas-backup.service zaas-backup-volumes.service
+
+# Why did the run fail?
+journalctl -u zaas-backup.service -u zaas-backup-volumes.service --since '2 days ago'
+
+# What is actually on disk?
+ls -lt /var/backups/zaas/daily/ /var/backups/zaas/volumes/daily/
+df -h /
+
+# What is the metric saying, and did node_exporter read it?
+cat /var/lib/node_exporter/textfile_collector/zaas-backup-*.prom
+curl -s http://localhost:9100/metrics | grep -E '^(zaas_backup|node_textfile_)'
+```
+
+**Remediation:**
+
+```bash
+# Re-run the failed backup by hand and watch it
+sudo systemctl start zaas-backup.service
+journalctl -u zaas-backup.service --no-pager -n 40
+
+# Timer not armed
+sudo systemctl enable --now zaas-backup.timer zaas-backup-volumes.timer
+
+# Unit file changed in git but not installed (git pull does not touch /etc/systemd/system)
+sudo cp /opt/zaas/deploy/scripts/zaas-backup*.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# node_textfile_scrape_error is 1: find the malformed file, fix or delete it,
+# then re-run the backup to regenerate it
+ls -l /var/lib/node_exporter/textfile_collector/
+```
+
+If the disk is full, work the [ZaasDiskSpaceLow](#zaas-disk-space-low) playbook first - a
+full disk fails the backup and the alert clears itself once space is freed and the next run
+succeeds.
+
+`ZaasBackupFailed` stays firing until the **next** run succeeds, which by default is the
+following day. Re-running the unit by hand clears it sooner.
+
+---
+
 ## PostgreSQL: Restore from pg_dump
 
 Use this procedure when the PostgreSQL data volume is lost or corrupted and a `pg_dump` backup is available.
@@ -1189,8 +1498,11 @@ docker exec -it deploy-postgres-1 psql -U zaas -d postgres -c "CREATE DATABASE z
 
 ```bash
 gunzip -c /var/backups/zaas/daily/zaas-2026-05-31.sql.gz \
-  | docker exec -i deploy-postgres-1 psql -U zaas -d zaas
+  | docker exec -i deploy-postgres-1 psql -U zaas -d zaas -v ON_ERROR_STOP=1
 ```
+
+`-v ON_ERROR_STOP=1` is not optional: without it `psql` continues past failing statements
+and exits 0, so a partially restored database reports success.
 
 ### Step 5: Verify the restore
 
@@ -1206,6 +1518,118 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 ```
 
 Verify: `curl https://zaas.at/healthz`
+
+---
+
+## Docker Volumes: Restore from tar backup
+
+Use this procedure when `caddy_data`, `grafana_data` or `alertmanager_data` is lost or
+corrupted. Archives are created by the timer in section 9.
+
+**Backups are stored at:** `/var/backups/zaas/volumes/{daily,weekly,monthly}/` on the host,
+named `deploy_<volume>-<date>.tar.gz`.
+
+### Step 1: Identify the archive
+
+```bash
+ls -lt /var/backups/zaas/volumes/daily/
+# e.g. deploy_grafana_data-2026-08-01.tar.gz
+```
+
+### Step 2: Stop the service that owns the volume
+
+| Volume | Service |
+| ------ | ------- |
+| `deploy_caddy_data` | `caddy` |
+| `deploy_grafana_data` | `grafana` |
+| `deploy_alertmanager_data` | `alertmanager` |
+
+```bash
+sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml \
+  --env-file /opt/zaas/.env stop grafana
+```
+
+### Step 3: Wipe and repopulate the volume in place
+
+Restoring into the existing volume keeps it attached to the compose project, so no
+container has to be recreated.
+
+```bash
+docker run --rm \
+  -v deploy_grafana_data:/target \
+  -v /var/backups/zaas/volumes/daily:/backup:ro \
+  debian:13-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd \
+  sh -c 'rm -rf /target/..?* /target/.[!.]* /target/* && \
+         tar xzf /backup/deploy_grafana_data-2026-08-01.tar.gz --numeric-owner -C /target'
+```
+
+The helper runs as root so `tar` can restore ownership, and `--numeric-owner` on extract
+matters as much as it did on create: Grafana runs as uid 472 and Alertmanager as uid 65534,
+and those names do not resolve inside the helper image.
+
+### Step 4: Start and verify
+
+```bash
+sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml \
+  --env-file /opt/zaas/.env start grafana
+```
+
+Per-volume checks:
+
+| Volume | Verify |
+| ------ | ------ |
+| `grafana_data` | Log in at `http://<server-ip>:3000`; users and UI-created dashboards are back. Grafana's default plugins are excluded from the archive and its background installer re-downloads them over the next minute - `docker compose logs grafana \| grep "Plugin successfully installed"` |
+| `caddy_data` | `docker compose logs caddy` shows certificates loaded from disk, with no new ACME order |
+| `alertmanager_data` | Previously active silences are listed at `http://<server-ip>:9093` |
+
+---
+
+## Full Server Loss: Rebuild from Offsite
+
+Use this procedure when the host is gone entirely and the only surviving copy is the one on
+the backup server (section 12).
+
+### Step 1: Provision a replacement server
+
+```bash
+make infra-apply
+```
+
+Then work through [Part 1 section 2, Server Bootstrap](#2-server-bootstrap).
+
+### Step 2: Push the archives up to the new host
+
+Run on the **backup server**. Push as the `deploy` user - the offsite reader key is
+read-only by design and deliberately cannot write:
+
+```bash
+rsync -avz -e "ssh -p 2222" /var/backups/zaas-offsite/ deploy@<new-server-ip>:/var/backups/zaas/
+```
+
+### Step 3: Restore PostgreSQL
+
+Follow [PostgreSQL: Restore from pg_dump](#postgresql-restore-from-pg_dump).
+
+### Step 4: Restore the Docker volumes
+
+Follow [Docker Volumes: Restore from tar backup](#docker-volumes-restore-from-tar-backup)
+for each of the three volumes. Restoring `caddy_data` first avoids re-issuing certificates
+against Let's Encrypt rate limits.
+
+### Step 5: Re-arm the backups
+
+The new host has no timers. Work through [section 9](#9-backups-timers-and-metrics) and
+[section 12](#12-offsite-backups-read-only-reader-account) again - the reader account and
+its `sshd_config` drop-in do not survive a rebuild, and the host key changed, so re-run
+`ssh-keyscan` on the backup server.
+
+Verify the whole chain is back:
+
+```bash
+sudo systemctl start zaas-backup.service zaas-backup-volumes.service
+curl -s http://localhost:9100/metrics | grep zaas_backup_last_run_success
+# -> both backups report 1
+```
 
 ---
 
