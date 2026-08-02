@@ -176,7 +176,7 @@ Routes are evaluated in order and the first match wins. Every message links to t
 
 Delivery is a Slack Incoming Webhook. The URL is a secret, and because Alertmanager does not expand environment variables in its config it is read from a file (`global.slack_api_url_file`) mounted at `/etc/alertmanager/secrets/` from the gitignored `deploy/secrets/`. Setup is [runbook section 13](runbook.md#13-slack-alert-notifications).
 
-`severity: none` is used by exactly one rule, `ZaasWatchdog`, which fires permanently by design. Its heartbeat is what makes a broken delivery path detectable: a missing secret file does not stop Alertmanager starting and produces no error, so *absence* of the daily message is the only available signal. See [ZaasWatchdog](runbook.md#zaas-watchdog).
+`severity: none` is used by exactly one rule, `ZaasWatchdog`, which fires permanently by design. Its heartbeat is what makes a broken delivery path detectable: a missing secret file does not stop Alertmanager starting and produces no error, so *absence* of the daily message is the only available signal. See [ZaasWatchdog](runbook.md#zaaswatchdog).
 
 ## Node Exporter: Host Metrics
 

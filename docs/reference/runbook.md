@@ -45,16 +45,16 @@ Ad-hoc and ongoing procedures, looked up as needed.
 Procedures for responding to Prometheus alerts. Each section corresponds to an alert rule in `deploy/prometheus.rules.yaml`.
 
 - [First Response Checklist](#first-response-checklist)
-- [ZaasApiDown](#zaas-api-down)
-- [ZaasHighErrorRate](#zaas-high-error-rate)
-- [ZaasHighP99Latency](#zaas-high-p99-latency)
-- [ZaasHighRateLimitRate](#zaas-high-rate-limit-rate)
-- [ZaasDiskSpaceLow / ZaasDiskSpaceCritical](#zaas-disk-space-low)
-- [ZaasPostgresDown](#zaas-postgres-down)
-- [ZaasRedisDown](#zaas-redis-down)
-- [ZaasCollectorDroppedSpans / ZaasCollectorDroppedMetrics / ZaasCollectorDroppedLogs / ZaasCollectorDown](#zaas-collector-dropped-data)
-- [ZaasBackupFailed / ZaasBackupStale / ZaasBackupMetricsMissing](#zaas-backup-stale)
-- [ZaasWatchdog](#zaas-watchdog)
+- [ZaasApiDown](#zaasapidown)
+- [ZaasHighErrorRate](#zaashigherrorrate)
+- [ZaasHighP99Latency](#zaashighp99latency)
+- [ZaasHighRateLimitRate](#zaashighratelimitrate)
+- [ZaasDiskSpaceLow / ZaasDiskSpaceCritical](#zaasdiskspacelow)
+- [ZaasPostgresDown](#zaaspostgresdown)
+- [ZaasRedisDown](#zaasredisdown)
+- [ZaasCollectorDroppedSpans / ZaasCollectorDroppedMetrics / ZaasCollectorDroppedLogs / ZaasCollectorDown](#zaascollectordroppeddata)
+- [ZaasBackupFailed / ZaasBackupStale / ZaasBackupMetricsMissing](#zaasbackupstale)
+- [ZaasWatchdog](#zaaswatchdog)
 - [PostgreSQL: Restore from pg_dump](#postgresql-restore-from-pg_dump)
 - [Docker Volumes: Restore from tar backup](#docker-volumes-restore-from-tar-backup)
 - [Full Server Loss: Rebuild from Offsite](#full-server-loss-rebuild-from-offsite)
@@ -903,7 +903,7 @@ A yellow `[FIRING] ZaasSlackTest` message should reach the channel within ~30 se
 Within roughly a minute of the Prometheus restart, a green **ZaaS alerting heartbeat**
 message should also arrive - that is `ZaasWatchdog`, which repeats once every 24h. Its whole
 purpose is that its *absence* tells you delivery has broken. See
-[ZaasWatchdog](#zaas-watchdog).
+[ZaasWatchdog](#zaaswatchdog).
 
 ### 13.5 Rotating the webhook
 
@@ -1279,7 +1279,7 @@ When paged, run through these steps before diving into a specific alert playbook
 5. Check API logs: `docker logs deploy-api-1 --since 15m 2>&1 | tail -50`
 6. Check PostgreSQL exporter target: Grafana -> Explore -> Prometheus, query `up{job="postgres"}`.
 7. Check Redis exporter target: query `up{job="redis"}`.
-8. If the Grafana dashboard shows no data at all, check the OTel Collector (see [ZaasCollectorDown](#zaas-collector-dropped-data)).
+8. If the Grafana dashboard shows no data at all, check the OTel Collector (see [ZaasCollectorDown](#zaascollectordroppeddata)).
 9. After diagnosing, update the Alertmanager silence if work is underway to suppress repeated pages.
 
 ---
@@ -1660,7 +1660,7 @@ sudo systemctl daemon-reload
 ls -l /var/lib/node_exporter/textfile_collector/
 ```
 
-If the disk is full, work the [ZaasDiskSpaceLow](#zaas-disk-space-low) playbook first - a
+If the disk is full, work the [ZaasDiskSpaceLow](#zaasdiskspacelow) playbook first - a
 full disk fails the backup and the alert clears itself once space is freed and the next run
 succeeds.
 
