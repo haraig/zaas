@@ -85,6 +85,12 @@ receivers:
         send_resolved: false
         color: "good"
         title: "ZaaS alerting heartbeat"
+        # Without an explicit title_link, Alertmanager falls back to
+        # slack.default.titlelink, which builds a URL from .ExternalURL - and
+        # that defaults to the container's own hostname, so the link resolves to
+        # something like http://c2b677bce09d:9093 and goes nowhere. Point it at
+        # the playbook instead, as the other two receivers do.
+        title_link: '{{ (index .Alerts 0).Labels.runbook_url }}'
         text: "Alertmanager to Slack delivery is working. If this stops arriving, alert delivery is broken."
 
 inhibit_rules:
