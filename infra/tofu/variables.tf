@@ -74,6 +74,12 @@ variable "enable_rdns" {
   default     = false
 }
 
+variable "enable_firewall" {
+  type        = bool
+  description = "Whether to attach a Hetzner Cloud Firewall allowing only SSH, HTTP, HTTPS and ICMP inbound. Enforced outside the host, so unlike ufw it also covers Docker-published container ports"
+  default     = true
+}
+
 variable "server_type" {
   type        = string
   description = "Hetzner server type (e.g., cx23, cx33)"

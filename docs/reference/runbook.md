@@ -38,6 +38,7 @@ Ad-hoc and ongoing procedures, looked up as needed.
 - [PostgreSQL: Manual Database Access](#postgresql-manual-database-access)
 - [Client Administration (SQL Reference)](#client-administration-sql-reference)
 - [Offsite Backups: Manual Pull](#offsite-backups-manual-pull)
+- [Accessing Internal Service UIs](#accessing-internal-service-uis)
 
 ### Part 3: Alert Playbooks
 
@@ -100,6 +101,41 @@ make infra-init
 make infra-plan   # review before applying
 make infra-apply
 ```
+
+### 1.4 Firewall
+
+`make infra-apply` also creates a Hetzner Cloud Firewall (`enable_firewall`, default `true`)
+and attaches it to the server. It allows only inbound SSH (`ssh_port`), HTTP, HTTPS and ICMP;
+everything else is dropped at Hetzner's edge.
+
+This is the authoritative ingress control, **not** ufw. Docker publishes container ports
+through the `FORWARD` chain, which never traverses the `INPUT` chain that ufw filters, so ufw
+cannot restrict any published container port. The cloud firewall sits outside the host and is
+not bypassable that way.
+
+Two consequences:
+
+- Exposing a new port publicly needs a rule here **and** the corresponding compose change.
+  Adding only `ports:` in `deploy/docker-compose.yaml` silently does nothing.
+- The firewall is deliberately **inbound-only**. A Hetzner firewall leaves egress
+  unrestricted only while it has zero outbound rules; adding even one drops everything else
+  outbound and would break ACME issuance, GHCR pulls, SMTP and alert notifications.
+
+Verify from a machine outside the server:
+
+```bash
+for p in 9090 9093 3000 3100 3200; do
+  echo -n "$p: "
+  curl -sS --connect-timeout 5 -o /dev/null -w '%{http_code}\n' http://<server-ip>:$p/ \
+    || echo "refused/filtered (expected)"
+done
+
+curl -sS https://<domain>/healthz   # must still work
+```
+
+Applying the firewall to an already-running server does not replace it - the attachment is a
+separate resource and leaves `hcloud_server` untouched. Confirm `make infra-plan` reports
+**0 to destroy** before applying, and keep an SSH session open while you do.
 
 ---
 
@@ -534,7 +570,8 @@ docker logs deploy-api-1 2>&1 | grep "rate limiter"
 Verify Redis metrics are being scraped (from Prometheus):
 
 ```
-http://<server-ip>:9090/targets
+# On the server, or via the SSH tunnel in "Accessing Internal Service UIs":
+http://localhost:9090/targets
 # -> redis job should show "UP"
 ```
 
@@ -640,7 +677,8 @@ docker exec deploy-prometheus-1 wget -qO- http://host.docker.internal:9100/metri
 # -> # HELP node_cpu_seconds_total ...
 
 # Check Prometheus targets page:
-# http://<server-ip>:9090/targets  ->  node-exporter job should show "UP"
+# http://localhost:9090/targets  ->  node-exporter job should show "UP"
+# (on the server, or through the SSH tunnel - see "Accessing Internal Service UIs")
 ```
 
 Confirm the textfile collector picked up the backup metrics (requires section 9):
@@ -775,6 +813,17 @@ Then set up the pull itself - see [Offsite Backups: Manual Pull](#offsite-backup
 Without this section every Prometheus alert - including `ZaasApiDown` and `ZaasBackupStale` -
 is visible only to someone who happens to open the Alertmanager UI. This delivers them to a
 Slack channel through an Incoming Webhook.
+
+> **Prerequisite: port 9093 must not be reachable from the internet before you do this.**
+> The Alertmanager API accepts unauthenticated writes, so anyone who can reach it can `POST`
+> an arbitrary alert that Alertmanager will then deliver to Slack looking exactly like a
+> genuine one - an anonymous phishing channel into your team's chat. Confirm the lockdown
+> from [section 1.4](#14-firewall) is in place first:
+>
+> ```bash
+> curl -sS --connect-timeout 5 http://<server-ip>:9093/api/v2/status
+> # must fail or time out
+> ```
 
 Incoming Webhooks work on the Slack **Free** plan. Two Free-plan limits are worth knowing:
 the workspace is capped at 10 apps/integrations (this app counts as one), and message
@@ -1155,15 +1204,71 @@ sha256sum /var/backups/zaas/daily/zaas-<date>.sql.gz
 
 ---
 
+## Accessing Internal Service UIs
+
+Prometheus, Alertmanager, Loki, Tempo and Grafana bind to `127.0.0.1` on the server and are
+blocked at the Hetzner Cloud Firewall. They are not reachable from the internet, by design.
+
+Only two things are public: Caddy on 80/443, and Grafana through it at
+`https://grafana.<domain>`. Everything else needs either an SSH session or a tunnel.
+
+### From the server
+
+Nothing special - `localhost` works exactly as it always did:
+
+```bash
+curl -s localhost:9093/api/v2/alerts
+curl -s localhost:9090/api/v1/rules
+curl -s 'localhost:3100/loki/api/v1/labels'
+```
+
+Every diagnostic command elsewhere in this runbook assumes you are on the server.
+
+### From a workstation
+
+Forward the ports you need over SSH, then use `localhost` on your own machine:
+
+```bash
+ssh -p 2222 -N \
+  -L 9090:127.0.0.1:9090 \
+  -L 9093:127.0.0.1:9093 \
+  -L 3100:127.0.0.1:3100 \
+  -L 3200:127.0.0.1:3200 \
+  <user_name>@<server-ip>
+```
+
+Leave that running and open `http://localhost:9090/targets`, `http://localhost:9093`, and so
+on in a browser. `-N` means "no remote command", so it just holds the tunnel open.
+
+Grafana needs no tunnel - use `https://grafana.<domain>`. The loopback binding on 3000 is a
+break-glass path for when Caddy itself is the problem; add `-L 3000:127.0.0.1:3000` then.
+
+### Why it is set up this way
+
+Docker publishes container ports by DNAT'ing them into the `FORWARD` chain, which never
+traverses `INPUT` where ufw's rules live. A port published on `0.0.0.0` is therefore reachable
+from the internet no matter what `ufw status` says. Two independent measures close this:
+
+1. `deploy/docker-compose.yaml` binds each of these services to `127.0.0.1`, so Docker never
+   opens them beyond the host.
+2. The Hetzner Cloud Firewall (`infra/tofu/modules/hcloud_server/main.tf`) drops everything
+   except SSH, HTTP, HTTPS and ICMP at Hetzner's edge, before packets reach the host - which
+   is what makes a future accidental `0.0.0.0` binding harmless.
+
+Adding a genuinely public port therefore needs **both** a compose change and a firewall rule.
+See [gotchas.md](gotchas.md) for the full explanation of the ufw/Docker interaction.
+
+---
+
 # Part 3: Alert Playbooks
 
-This part documents the response procedure for each Prometheus alert defined in `deploy/prometheus.rules.yaml`. Alert notifications are delivered via Alertmanager (configured in `deploy/alertmanager.yaml`). The Alertmanager UI is at `http://<server-ip>:9093`.
+This part documents the response procedure for each Prometheus alert defined in `deploy/prometheus.rules.yaml`. Alert notifications are delivered via Alertmanager (configured in `deploy/alertmanager.yaml`). The Alertmanager UI is at `http://localhost:9093` from the server, or through the SSH tunnel in [Accessing Internal Service UIs](#accessing-internal-service-uis). It is not exposed to the internet.
 
 ## First Response Checklist
 
 When paged, run through these steps before diving into a specific alert playbook:
 
-1. Open Grafana ZaaS Overview: `http://<server-ip>:3000` (or `https://zaas.at/grafana` if proxied). Check for red panels.
+1. Open Grafana ZaaS Overview: `https://grafana.<domain>`. Check for red panels.
 2. Check API health endpoint: `curl https://zaas.at/healthz` - should return `{"status":"ok"}`.
 3. Check container status on the server:
    ```bash
@@ -1485,7 +1590,7 @@ docker ps -a --filter name=deploy-prometheus
 docker ps -a --filter name=deploy-loki
 
 # In Prometheus (if it is still up): check otelcol_* metrics
-# http://<server-ip>:9090/graph?g0.expr=otelcol_exporter_send_failed_spans_total
+# http://localhost:9090/graph?g0.expr=otelcol_exporter_send_failed_spans_total
 ```
 
 **Remediation:**
@@ -1585,10 +1690,10 @@ at send time. Without a heartbeat there is no way to tell a broken webhook from 
 
 ```bash
 # 1. Is Prometheus evaluating the rule?
-#    http://<server-ip>:9090/alerts -> ZaasWatchdog should be FIRING
+#    http://localhost:9090/alerts -> ZaasWatchdog should be FIRING
 
 # 2. Did Prometheus hand it to Alertmanager?
-#    http://<server-ip>:9093 -> ZaasWatchdog should be listed
+#    http://localhost:9093 -> ZaasWatchdog should be listed
 docker exec deploy-alertmanager-1 amtool alert \
   --alertmanager.url=http://localhost:9093
 
@@ -1727,9 +1832,9 @@ Per-volume checks:
 
 | Volume | Verify |
 | ------ | ------ |
-| `grafana_data` | Log in at `http://<server-ip>:3000`; users and UI-created dashboards are back. Grafana's default plugins are excluded from the archive and its background installer re-downloads them over the next minute - `docker compose logs grafana \| grep "Plugin successfully installed"` |
+| `grafana_data` | Log in at `https://grafana.<domain>`; users and UI-created dashboards are back. Grafana's default plugins are excluded from the archive and its background installer re-downloads them over the next minute - `docker compose logs grafana \| grep "Plugin successfully installed"` |
 | `caddy_data` | `docker compose logs caddy` shows certificates loaded from disk, with no new ACME order |
-| `alertmanager_data` | Previously active silences are listed at `http://<server-ip>:9093` |
+| `alertmanager_data` | Previously active silences are listed at `http://localhost:9093` (from the server) |
 
 ---
 
@@ -1799,7 +1904,7 @@ Docker Compose will create any missing named volumes automatically.
 
 ### Step 2: Verify Grafana provisioning
 
-Open Grafana: `http://<server-ip>:3000`
+Open Grafana: `https://grafana.<domain>`
 
 Log in with `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` from `.env`.
 
