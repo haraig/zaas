@@ -13,3 +13,6 @@
 # Environment variables
 .env
 .env.production
+
+# Secrets mounted into containers (e.g. the Alertmanager Slack webhook URL)
+deploy/secrets/

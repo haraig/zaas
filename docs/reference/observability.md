@@ -17,7 +17,7 @@ Pinned image versions are the source of truth in [`deploy/docker-compose.yaml`](
 | **postgres-exporter** | Metrics | Exposes database-level metrics to Prometheus via scrape on `:9187`. |
 | **redis-exporter** | Metrics | Exposes Redis INFO metrics to Prometheus via scrape on `:9121`. |
 | **Node Exporter** | Metrics | Host-level metrics. Runs as a systemd service on the Hetzner host (not in Docker). Exposes CPU, memory, disk, network on `:9100`. See [runbook section 11](runbook.md#11-node-exporter-host-metrics) for installation. |
-| **Alertmanager** | - | Alert routing and notification. Receives firing alerts from Prometheus, groups and deduplicates them, and routes to configured receivers (email, Slack, PagerDuty, etc.). UI at `:9093`. |
+| **Alertmanager** | - | Alert routing and notification. Receives firing alerts from Prometheus, groups and deduplicates them, and delivers them to Slack via an Incoming Webhook. UI at `:9093`. |
 
 ## Architecture Diagram
 
@@ -139,7 +139,7 @@ All UIs are on `localhost` when running the local stack (`make dev`).
 | **Loki** (no UI) | `http://localhost:3100` | None | Query via Grafana Explore (LogQL) or HTTP API. |
 | **Tempo** (no UI) | `http://localhost:3200` | None | Query via Grafana Explore (Tempo datasource) or HTTP API. `/ready` confirms health. |
 | **OTel Collector** (no UI) | `http://localhost:8888/metrics` | None | Collector self-monitoring metrics. |
-| **Alertmanager** | `http://localhost:9093` | None | View firing alerts, manage silences, inspect routing. |
+| **Alertmanager** | `http://localhost:9093` | None | View firing alerts, manage silences, inspect routing. Notifications go to Slack - see [runbook section 13](runbook.md#13-slack-alert-notifications). |
 
 > **Production:** Grafana is at `https://grafana.zaas.at` with username/password login. Anonymous access is disabled.
 
@@ -157,6 +157,22 @@ All observability backends use named Docker volumes defined in `deploy/docker-co
 | **OTel Collector** | - | - | Stateless. |
 
 If volume data is lost, see [Observability Stack Bootstrap (data loss)](runbook.md#observability-stack-bootstrap-data-loss) in the runbook.
+
+## Alert Routing and Delivery
+
+Alert rules live in `deploy/prometheus.rules.yaml`; routing and delivery live in `deploy/alertmanager.yaml`. Every rule carries a `severity` label, and that label alone decides where the notification goes.
+
+| `severity` | Receiver | Slack color | Repeat interval |
+| ---------- | -------- | ----------- | --------------- |
+| `critical` | `slack-critical` | red (green on resolve) | 1h |
+| `warning`, plus anything unmatched | `slack-warning` | yellow (green on resolve) | 4h |
+| `none` | `slack-watchdog` | green | 24h |
+
+Routes are evaluated in order and the first match wins. Every message links to the firing alert's own `runbook_url` label, so the Slack title goes straight to its playbook section.
+
+Delivery is a Slack Incoming Webhook. The URL is a secret, and because Alertmanager does not expand environment variables in its config it is read from a file (`global.slack_api_url_file`) mounted at `/etc/alertmanager/secrets/` from the gitignored `deploy/secrets/`. Setup is [runbook section 13](runbook.md#13-slack-alert-notifications).
+
+`severity: none` is used by exactly one rule, `ZaasWatchdog`, which fires permanently by design. Its heartbeat is what makes a broken delivery path detectable: a missing secret file does not stop Alertmanager starting and produces no error, so *absence* of the daily message is the only available signal. See [ZaasWatchdog](runbook.md#zaas-watchdog).
 
 ## Node Exporter: Host Metrics
 

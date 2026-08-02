@@ -240,6 +240,16 @@ Covered above in the "OTel Collector needs root" entry (`e2bcb39`) - the timesta
 
 ---
 
+### A missing Alertmanager secret file fails silently - the process starts, notifications do not
+
+**Symptom:** None whatsoever. Alertmanager starts, reports healthy, the UI at `:9093` shows alerts firing normally, and no notification ever reaches Slack. There is no error in the logs at startup.
+
+**Gotcha:** `global.slack_api_url_file` (and the equivalent `*_file` options for other notifiers) is read at *notification* time, not at config load. Point it at a path that does not exist and Alertmanager still starts cleanly - verified against the pinned `prom/alertmanager:v0.33.1`, which also passes `amtool check-config` on such a config without complaint. The whole notification path can therefore be dead while every observable signal says the alerting stack is healthy. This is worse than a loud failure, because a quiet Slack channel is exactly what a healthy system also looks like.
+
+**Fix:** Two things. Test-fire an alert after any change to the secret or the receiver config (`amtool alert add ZaasSlackTest severity=warning --alertmanager.url=http://localhost:9093`) rather than trusting a clean startup. And keep the `ZaasWatchdog` rule in `deploy/prometheus.rules.yaml`: it fires permanently by design and delivers one heartbeat message a day, so a silent delivery path becomes visible as a *missing* message. A corollary: use `printf` rather than `echo` when writing the webhook URL to disk, since a trailing newline is enough to break the request with the same silence.
+
+---
+
 ## Go
 
 ### Go nil interface method calls panic at runtime with no compile-time warning

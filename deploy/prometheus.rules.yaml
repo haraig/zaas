@@ -206,3 +206,21 @@ groups:
         annotations:
           summary: "ZaaS {{ $labels.backup }} backup metrics are missing"
           description: "No zaas_backup_last_success_timestamp_seconds series for {{ $labels.backup }}. The backup may never have succeeded, or the node_exporter textfile collector is misconfigured - check node_textfile_scrape_error."
+
+  - name: zaas.watchdog
+    rules:
+      # ── Delivery heartbeat ─────────────────────────────────────────────────
+
+      # Always firing, by design. Its job is to prove the whole path from
+      # Prometheus through Alertmanager to Slack still works: a missing or wrong
+      # slack_api_url_file does not stop Alertmanager starting and logs nothing,
+      # so without a heartbeat, silence is indistinguishable from health.
+      # Routed to its own quiet receiver via severity=none (deploy/alertmanager.yaml).
+      - alert: ZaasWatchdog
+        expr: vector(1)
+        labels:
+          severity: none
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-watchdog
+        annotations:
+          summary: "ZaaS alerting pipeline is alive"
+          description: "This alert always fires. If it stops arriving in Slack, alert delivery is broken - not the service."
