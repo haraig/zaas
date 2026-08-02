@@ -154,9 +154,15 @@ services:
     volumes:
       - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
+    # Loopback only. Grafana reaches Tempo over the compose network by service
+    # name, so publishing exists purely for host-side debugging. Binding to
+    # 0.0.0.0 would expose it to the internet: Docker's published ports are
+    # DNAT'd into FORWARD and never traverse the INPUT chain where ufw's rules
+    # live, so ufw does not filter them. Reach these from a workstation with an
+    # SSH tunnel - see docs/reference/runbook.md.
     ports:
-      - "3200:3200" # Tempo HTTP API
-      - "9095:9095" # Tempo gRPC (used by Grafana Drilldown)
+      - "127.0.0.1:3200:3200" # Tempo HTTP API
+      - "127.0.0.1:9095:9095" # Tempo gRPC (used by Grafana Drilldown)
     command: ["-config.file=/etc/tempo/tempo.yaml"]
 
   prometheus:
@@ -168,8 +174,9 @@ services:
       - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus.rules.yaml:/etc/prometheus/prometheus.rules.yaml:ro
       - prometheus_data:/prometheus
+    # Loopback only - see the note on the tempo service.
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -180,8 +187,12 @@ services:
   grafana:
     image: grafana/grafana:13.0.4@sha256:fc6c7447962d7523090407b94da705fdb6e7ac855c9c4f0293d91a87785a77b0
     restart: unless-stopped
+    # Loopback only. Grafana is served publicly at https://grafana.<domain>
+    # through Caddy, with TLS and security headers. Publishing 3000 on 0.0.0.0
+    # would additionally offer the login form over plaintext HTTP, bypassing
+    # all of that. This binding is a break-glass path over an SSH tunnel.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
@@ -207,8 +218,10 @@ services:
     volumes:
       - ./loki.yaml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
+    # Loopback only. Loki runs with auth_enabled: false, so anyone who can reach
+    # this port can query the application logs. See the note on the tempo service.
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
 
   alertmanager:
@@ -221,8 +234,12 @@ services:
       # by hand on the server, gitignored, never committed.
       - ./secrets:/etc/alertmanager/secrets:ro
       - alertmanager_data:/alertmanager
+    # Loopback only, and the most important of these bindings: the Alertmanager
+    # API takes unauthenticated writes. Anyone who can reach this port can
+    # silence every alert, and can POST an arbitrary alert that Alertmanager
+    # will then deliver to Slack looking like a genuine one.
     ports:
-      - "9093:9093"
+      - "127.0.0.1:9093:9093"
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yaml"
       - "--storage.path=/alertmanager"
