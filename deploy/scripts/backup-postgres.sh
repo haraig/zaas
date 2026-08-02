@@ -6,12 +6,15 @@
 #   - 4 weekly backups (Sundays)
 #   - 6 monthly backups (first Sunday of month)
 #
-# Backup directory: /var/backups/zaas/ (owned by deploy:deploy)
+# Backup directory: /var/backups/zaas/ (owned by deploy:deploy, mode 0750)
 # Container name: deploy-postgres-1
 
 set -euo pipefail
 
-BACKUP_DIR="/var/backups/zaas"
+# Dumps contain hashed API keys, so keep them out of reach of other host users.
+umask 027
+
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/zaas}"
 CONTAINER="deploy-postgres-1"
 DATE=$(date +%Y-%m-%d)
 DOW=$(date +%u)  # 1=Monday, 7=Sunday
@@ -24,11 +27,18 @@ MONTHLY_DIR="${BACKUP_DIR}/monthly"
 mkdir -p "${DAILY_DIR}" "${WEEKLY_DIR}" "${MONTHLY_DIR}"
 
 DUMP_FILE="${DAILY_DIR}/zaas-${DATE}.sql.gz"
+TMP_FILE="${DUMP_FILE}.tmp"
 
 echo "[$(date -Iseconds)] Starting PostgreSQL backup..."
 
-# Dump database
-docker exec "${CONTAINER}" pg_dump -U zaas zaas | gzip > "${DUMP_FILE}"
+trap 'rm -f "${TMP_FILE}"' EXIT
+
+# Dump the database to a temporary file and verify it before moving into place.
+# Redirecting straight into DUMP_FILE would truncate it before pg_dump runs, so
+# a failed dump would leave a zero-length file that looks like a valid backup.
+docker exec "${CONTAINER}" pg_dump -U zaas zaas | gzip > "${TMP_FILE}"
+gzip -t "${TMP_FILE}"
+mv "${TMP_FILE}" "${DUMP_FILE}"
 
 echo "[$(date -Iseconds)] Daily backup created: ${DUMP_FILE}"
 
@@ -48,5 +58,8 @@ fi
 find "${DAILY_DIR}" -name "zaas-*.sql.gz" -mtime +7 -delete
 find "${WEEKLY_DIR}" -name "zaas-*.sql.gz" -mtime +28 -delete
 find "${MONTHLY_DIR}" -name "zaas-*.sql.gz" -mtime +180 -delete
+
+# Sweep up temporary files orphaned by an interrupted run (e.g. a reboot).
+find "${DAILY_DIR}" -name "zaas-*.sql.gz.tmp" -mtime +1 -delete
 
 echo "[$(date -Iseconds)] Backup complete. Rotation applied."
