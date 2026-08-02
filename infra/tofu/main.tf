@@ -11,6 +11,7 @@ module "server" {
   ssh_public_key_file = var.ssh_public_key_file
   domain_tld          = var.domain_tld
   enable_rdns         = var.enable_rdns
+  enable_firewall     = var.enable_firewall
 }
 
 module "dns" {

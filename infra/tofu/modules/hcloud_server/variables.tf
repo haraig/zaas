@@ -62,3 +62,9 @@ variable "enable_rdns" {
   description = "Whether to create reverse DNS entries for the server IPv4 and IPv6 addresses"
   default     = false
 }
+
+variable "enable_firewall" {
+  type        = bool
+  description = "Whether to attach a Hetzner Cloud Firewall allowing only SSH, HTTP, HTTPS and ICMP inbound. Enforced outside the host, so unlike ufw it also covers Docker-published container ports"
+  default     = true
+}
