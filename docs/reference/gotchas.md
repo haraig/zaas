@@ -147,6 +147,30 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### ufw does not filter Docker-published ports, so `ufw status` is not the list of open ports
+
+**Symptom:** `sudo ufw status` on the production server showed only `2222`, `80`, `443` and one scoped rule for `9100`. Yet `curl http://<server-ip>:9093/api/v2/status` from an arbitrary machine on the internet returned the full Alertmanager configuration. Prometheus (`9090`), Loki (`3100`), Tempo (`3200`, `9095`) and the Grafana login form (`3000`) were reachable the same way. The firewall was active and correctly configured, and none of it applied.
+
+**Gotcha:** ufw writes its rules into the `INPUT` chain. Docker publishes a container port by DNAT'ing it in `nat/PREROUTING` and accepting it in `FORWARD` via its own `DOCKER` chain - so after translation the packet is *forwarded to the container*, not delivered locally, and it never traverses `INPUT` at all. ufw is not being overridden; it is simply not on the path. The mental model "the port is not in `ufw status`, so it is closed" is wrong for every containerized service, and the failure is completely silent - nothing logs, and the host looks locked down.
+
+The same server's ufw output contains a worked example of when ufw *does* apply: the `9100/tcp ALLOW 172.18.0.0/16` rule for Node Exporter works precisely because Node Exporter runs as a **host** systemd process rather than a container, so its traffic is host-destined and hits `INPUT` normally.
+
+The consequences here were not theoretical. Loki runs with `auth_enabled: false`, so application logs were anonymously queryable. Grafana was offering its login form over plaintext HTTP on 3000, bypassing the TLS and security headers Caddy already applies at `https://grafana.<domain>`. Worst of all, the Alertmanager API accepts **unauthenticated writes**: an anonymous `POST /api/v2/alerts` returns HTTP 200 and the injected alert is delivered to the configured receiver, so once a Slack receiver exists, port 9093 is an anonymous phishing channel into the team's chat.
+
+**Fix:** Two independent layers, because either alone is one mistake away from failing.
+
+1. Bind every non-public service to loopback in `deploy/docker-compose.yaml` - `"127.0.0.1:9093:9093"` rather than `"9093:9093"`. Docker then never opens the port beyond the host. This breaks nothing internally: container-to-container traffic resolves service names on the compose network and never goes through a published port.
+2. A Hetzner Cloud Firewall (`infra/tofu/modules/hcloud_server/main.tf`) allowing only SSH, HTTP, HTTPS and ICMP inbound. It is enforced at the provider's edge, outside the host, so no amount of iptables manipulation by Docker can bypass it - which is what makes a future accidental `0.0.0.0` binding harmless.
+
+Reach the loopback-bound services over an SSH tunnel; see [runbook.md](runbook.md#accessing-internal-service-uis). To audit what is actually published, read `docker compose config`, not `ufw status`:
+
+```bash
+docker compose -f deploy/docker-compose.yaml config --format json \
+  | jq -r '.services | to_entries[] | .key as $s | (.value.ports // [])[] | "\($s) \(.host_ip // "0.0.0.0"):\(.published)"'
+```
+
+---
+
 ### BusyBox `tar` silently lacks `--numeric-owner`, so an `alpine` helper corrupts volume ownership
 
 **Symptom:** A volume restored from a `tar` archive comes back with wrong file ownership, and the service (Grafana, Alertmanager) fails to start or cannot write its own data - even though the backup and restore both reported success.

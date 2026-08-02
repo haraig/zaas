@@ -142,6 +142,10 @@ All UIs are on `localhost` when running the local stack (`make dev`).
 | **Alertmanager** | `http://localhost:9093` | None | View firing alerts, manage silences, inspect routing. Notifications go to Slack - see [runbook section 13](runbook.md#13-slack-alert-notifications). |
 
 > **Production:** Grafana is at `https://grafana.zaas.at` with username/password login. Anonymous access is disabled.
+>
+> Every other UI in this table is **loopback-only** in production. `deploy/docker-compose.yaml` binds Prometheus, Alertmanager, Loki, Tempo and Grafana to `127.0.0.1`, and the Hetzner Cloud Firewall drops everything inbound except SSH, HTTP, HTTPS and ICMP. Reach them from the server with `localhost`, or from a workstation over an SSH tunnel - see [Accessing Internal Service UIs](runbook.md#accessing-internal-service-uis).
+>
+> ufw alone does not protect these: Docker-published ports bypass it entirely. See [gotchas.md](gotchas.md).
 
 ## Data Storage and Persistence
 
