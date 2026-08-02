@@ -115,7 +115,7 @@ zaas/
 
 ## Coding Conventions
 
-- **Commits:** [Conventional Commits](https://www.conventionalcommits.org/) - enforced by commitlint via lefthook. Accepted types: `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`, `style`, `perf`, `chore`. See `CONTRIBUTING.md` for the full list with examples.
+- **Commits:** [Conventional Commits](https://www.conventionalcommits.org/) - enforced by commitlint via lefthook. Accepted types: `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`, `style`, `perf`, `chore`. See `CONTRIBUTING.md` for the full list with examples. No AI attribution or co-author trailers - see Guardrails.
 - **Language:** All code, docs, comments, and configuration in American English
 - **Writing style:** Use American English spelling throughout all documentation and source code comments. Avoid typographic characters that look out of place in code projects: no em dashes (--), no en dashes, no curly quotes, no ellipsis character, no middle dot, no guillemets. Use plain ASCII punctuation instead (e.g., " - " for a dash, "..." for ellipsis, straight quotes).
 - **Config:** Environment variables only. No hardcoded domains - `ZAAS_BASE_URL` is the single source of truth
@@ -134,6 +134,7 @@ These are absolute prohibitions. Do not do any of the following under any circum
 - **NEVER modify `deploy/Caddyfile`, `deploy/docker-compose.yaml`, or files under `.github/workflows/`** without explicit user instruction. These control production deployments.
 - **NEVER hardcode domain names or base URLs** - `ZAAS_BASE_URL` is the single source of truth for the service domain.
 - **NEVER bypass git hooks** with `--no-verify`. Fix the underlying issue instead.
+- **NEVER add AI attribution to commits, pull requests, issues, or comments** - no `Co-Authored-By: Claude ...` trailers, no "Generated with Claude Code" footers, and no mention of Claude, Anthropic, or any AI assistant in commit messages, PR titles, PR descriptions, or issue text. Commits are authored by the human developer only.
 
 ## Never commit
 
