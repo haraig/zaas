@@ -1,9 +1,18 @@
 # Alertmanager configuration for ZaaS.
-# Alerts arrive from Prometheus (see prometheus.yaml alerting block).
+# Alerts arrive from Prometheus (see prometheus.yaml alerting block) and are
+# delivered to Slack through an Incoming Webhook.
 #
-# Configure the receiver to match your notification channel.
-# The default receiver below logs to the Alertmanager UI only.
-# Replace or extend the receivers list with email, PagerDuty, Slack, etc.
+# The webhook URL is a secret and is read from a file, because Alertmanager does
+# not expand environment variables in its config. Create it on the server:
+#
+#   sudo install -d -o root -g root -m 0700 /opt/zaas/deploy/secrets
+#   printf '%s' 'https://hooks.slack.com/services/...' \
+#     | sudo tee /opt/zaas/deploy/secrets/slack_api_url > /dev/null
+#   sudo chmod 0600 /opt/zaas/deploy/secrets/slack_api_url
+#
+# NOTE: if that file is missing, Alertmanager still starts cleanly and logs
+# nothing - delivery just silently fails at send time. That is what ZaasWatchdog
+# exists to catch. See docs/reference/runbook.md section 13.
 #
 # See https://prometheus.io/docs/alerting/latest/configuration/ for full reference.
 
@@ -11,16 +20,13 @@ global:
   # How long to wait before re-sending a resolved alert.
   resolve_timeout: 5m
 
-  # SMTP defaults - override via environment variables or replace with your provider.
-  # smtp_smarthost: 'smtp.migadu.com:587'
-  # smtp_from: 'alerts@zaas.at'
-  # smtp_auth_username: 'noreply@zaas.at'
-  # smtp_auth_password: '<ZAAS_SMTP_PASSWORD>'
-  # smtp_require_tls: true
+  # Slack Incoming Webhook URL, read from the mounted secrets directory.
+  slack_api_url_file: /etc/alertmanager/secrets/slack_api_url
 
 route:
-  # Default receiver used when no sub-route matches.
-  receiver: "default"
+  # Default receiver: anything not matched by a sub-route below, which in
+  # practice means severity=warning.
+  receiver: "slack-warning"
   # Group alerts by alertname so related alerts fire as one notification.
   group_by: ["alertname", "job"]
   # Wait for related alerts to arrive before sending the first notification.
@@ -31,22 +37,55 @@ route:
   repeat_interval: 4h
 
   routes:
+    # Route order matters - first match wins.
+
+    # The heartbeat. Always firing, so keep it quiet: one message a day.
+    - matchers:
+        - severity="none"
+      receiver: "slack-watchdog"
+      group_wait: 0s
+      repeat_interval: 24h
+
+    # Critical alerts nag every hour instead of every four.
     - matchers:
         - severity="critical"
-      receiver: "default"
+      receiver: "slack-critical"
       repeat_interval: 1h
 
 receivers:
-  - name: "default"
-    # Replace with a real notifier (email_configs, slack_configs, pagerduty_configs, etc.)
-    # Until configured, critical alerts are visible only in the Alertmanager UI at :9093.
-    #
-    # Example email receiver (uncomment and fill in):
-    # email_configs:
-    #   - to: 'ops@zaas.at'
-    #     send_resolved: true
-    #     headers:
-    #       Subject: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+  # channel: is required by Alertmanager even though an Incoming Webhook is
+  # already bound to a channel and ignores the field.
+  - name: "slack-critical"
+    slack_configs:
+      - channel: "#zaas-alerts"
+        send_resolved: true
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        # Links straight to the alert's own playbook section in the runbook.
+        title_link: '{{ (index .Alerts 0).Labels.runbook_url }}'
+        text: |-
+          {{ range .Alerts }}{{ .Annotations.description }}
+          {{ end }}
+
+  - name: "slack-warning"
+    slack_configs:
+      - channel: "#zaas-alerts"
+        send_resolved: true
+        color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+        title: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        title_link: '{{ (index .Alerts 0).Labels.runbook_url }}'
+        text: |-
+          {{ range .Alerts }}{{ .Annotations.description }}
+          {{ end }}
+
+  - name: "slack-watchdog"
+    slack_configs:
+      - channel: "#zaas-alerts"
+        # No resolved notification: this alert never resolves by design.
+        send_resolved: false
+        color: "good"
+        title: "ZaaS alerting heartbeat"
+        text: "Alertmanager to Slack delivery is working. If this stops arriving, alert delivery is broken."
 
 inhibit_rules:
   # If the API is completely down, suppress lower-severity API alerts.
