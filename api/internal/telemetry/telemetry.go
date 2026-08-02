@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	promhttp "github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -87,6 +88,11 @@ func Init(ctx context.Context, p Params) (Result, error) {
 		return Result{}, fmt.Errorf("create log exporter: %w", err)
 	}
 	promReg := prometheus.NewRegistry()
+	// A fresh registry does not include Go runtime / process metrics the way
+	// prometheus.DefaultRegisterer does - register them explicitly so the
+	// Grafana dashboard's Goroutines/Memory/GC panels have data to query.
+	promReg.MustRegister(collectors.NewGoCollector())
+	promReg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	promExp, err := promexporter.New(promexporter.WithRegisterer(promReg))
 	if err != nil {
 		return Result{}, fmt.Errorf("create prometheus exporter: %w", err)

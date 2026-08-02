@@ -7,12 +7,12 @@
 #   - 6 monthly backups (first Sunday of month)
 #
 # Backup directory: /var/backups/zaas/ (owned by deploy:deploy)
-# Container name: zaas-postgres-1
+# Container name: deploy-postgres-1
 
 set -euo pipefail
 
 BACKUP_DIR="/var/backups/zaas"
-CONTAINER="zaas-postgres-1"
+CONTAINER="deploy-postgres-1"
 DATE=$(date +%Y-%m-%d)
 DOW=$(date +%u)  # 1=Monday, 7=Sunday
 DOM=$(date +%d)  # Day of month (zero-padded, e.g. 07)

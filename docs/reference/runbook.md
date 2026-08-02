@@ -28,6 +28,7 @@ Follow these steps in order when setting up a new server from scratch.
 
 Ad-hoc and ongoing procedures, looked up as needed.
 
+- [Restarting the Server](#restarting-the-server)
 - [Releases](#releases)
 - [DMARC Policy Tightening](#dmarc-policy-tightening)
 - [Issuing an API Key on Request](#issuing-an-api-key-on-request)
@@ -99,7 +100,7 @@ make infra-apply
 
 **Source:** `docs/how-to/deploy.md`
 
-The server image (`docker-ce`) already has Docker installed and running. Cloud-init runs `package_update` and `package_upgrade` on first boot, and disables root login. SSH in as the configured user on the custom SSH port (default: `2222`):
+The server is provisioned from the `ubuntu-26.04` image. Cloud-init (`infra/tofu/modules/hcloud_server/user_data.yaml.tftpl`) installs Docker from the official Docker CE apt repository, runs `package_update` and `package_upgrade`, disables root login, and reboots once provisioning finishes. SSH in as the configured user on the custom SSH port (default: `2222`):
 
 ```bash
 ssh -p 2222 <user_name>@<server-ip>
@@ -483,11 +484,11 @@ Node Exporter exposes host-level metrics (CPU, memory, disk, network, filesystem
 ```bash
 # Download latest stable release
 NODE_EXPORTER_VERSION="1.9.1"
-wget "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz" \
-  -O /tmp/node_exporter.tar.gz
+curl -L "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz" \
+  -o /tmp/node_exporter.tar.gz
 
 tar -xzf /tmp/node_exporter.tar.gz -C /tmp/
-install -m 755 /tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin/node_exporter
+sudo install -m 755 /tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin/node_exporter
 rm -rf /tmp/node_exporter*
 ```
 
@@ -538,7 +539,24 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now node_exporter
 ```
 
-### 11.5 Verify
+### 11.5 Allow the Docker bridge network through the firewall
+
+Node Exporter binds to all interfaces by default. UFW is enabled by cloud-init, which only opens ports 22, 80, and 443 - port 9100 is blocked by default, including for the Prometheus container.
+
+`host.docker.internal` (configured via `extra_hosts: host-gateway` in `deploy/docker-compose.yaml`) resolves to the host's own bridge-gateway IP, so a scrape from the `prometheus` container is host-destined traffic that hits UFW's INPUT chain like any other incoming connection. This is not exempt the way container-to-container or published-port traffic is via the FORWARD chain. Without an explicit allow rule, UFW silently drops the connection instead of refusing it, which shows up as a hang rather than an immediate error.
+
+Allow port 9100 only from the Docker bridge subnet used by the compose stack, not the whole internet:
+
+```bash
+docker network inspect deploy_default | grep Subnet
+# e.g. "Subnet": "172.20.0.0/16"
+
+sudo ufw allow from <bridge-subnet> to any port 9100 proto tcp comment 'node_exporter for prometheus container'
+```
+
+This rule is required permanently, not just for the verification step below - Prometheus scrapes this endpoint on every scrape interval (`deploy/prometheus.yaml`).
+
+### 11.6 Verify
 
 ```bash
 systemctl status node_exporter
@@ -556,21 +574,43 @@ docker exec deploy-prometheus-1 wget -qO- http://host.docker.internal:9100/metri
 # http://<server-ip>:9090/targets  ->  node-exporter job should show "UP"
 ```
 
-### 11.6 Firewall note
-
-Node Exporter binds to all interfaces by default. UFW is enabled by cloud-init; ensure port 9100 is not exposed externally - it only needs to be reachable from the Docker bridge network:
-
-```bash
-ufw status
-# If port 9100 would be open to the internet, restrict it:
-sudo ufw deny 9100/tcp
-# The Docker bridge network bypasses UFW via iptables, so Prometheus can
-# still reach the host on host.docker.internal:9100.
-```
-
 ---
 
 # Part 2: Operational Procedures
+
+## Restarting the Server
+
+**When:** Applying kernel updates, recovering from a hung host, or any other situation requiring a full reboot.
+
+Reboot from inside the OS so services get a chance to shut down cleanly, rather than using a Hetzner Cloud Console power cycle:
+
+```bash
+ssh -p 2222 <user_name>@<server-ip>
+sudo reboot
+```
+
+No manual startup steps are needed afterward: every service in `deploy/docker-compose.yaml` runs with `restart: unless-stopped`, so Docker brings the full stack back up once the daemon starts. `node_exporter` and `zaas-backup.timer` are enabled systemd services (see sections 9 and 11) and start automatically as well.
+
+**Verify everything came back up:**
+
+```bash
+# Wait for SSH to come back, then check container status
+ssh -p 2222 <user_name>@<server-ip>
+docker ps --format 'table {{.Names}}\t{{.Status}}'
+# -> all containers should show "Up"
+
+# Check the host-level systemd services
+systemctl status node_exporter zaas-backup.timer
+# -> both should show "active"
+
+# Check the API responds
+curl https://zaas.at/healthz
+# -> {"status":"ok"}
+```
+
+If any container isn't `Up`, check its logs (`docker logs <container-name> --since 5m`) - see the [First Response Checklist](#first-response-checklist) and the relevant alert playbook below.
+
+---
 
 ## Releases
 

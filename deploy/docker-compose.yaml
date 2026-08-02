@@ -66,6 +66,7 @@ services:
       context: ./webhook
     image: zaas-webhook:local
     restart: unless-stopped
+    init: true
     environment:
       DEPLOY_WEBHOOK_SECRET: "${DEPLOY_WEBHOOK_SECRET}"
     volumes:

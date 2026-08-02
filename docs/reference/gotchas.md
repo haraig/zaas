@@ -50,6 +50,16 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### UFW's INPUT chain still filters container traffic addressed to `host.docker.internal`
+
+**Symptom:** `docker exec deploy-prometheus-1 wget -qO- http://host.docker.internal:9100/metrics` hung indefinitely with no output, and the `node-exporter` Prometheus target stayed unreachable, even though `node_exporter` was running and `curl http://localhost:9100/metrics` worked fine directly on the host.
+
+**Gotcha:** `deploy/docker-compose.yaml`'s `extra_hosts: host.docker.internal:host-gateway` resolves to the host's own bridge-gateway IP, so a request from a container to `host.docker.internal` is host-destined traffic that hits UFW's INPUT chain like any other incoming connection. It is easy to assume Docker's iptables manipulation exempts this the way it does for container-to-container traffic or published ports via the FORWARD chain - it does not. Cloud-init's UFW setup only opens ports 22, 80, and 443, so the scrape was silently dropped rather than refused, producing a hang (no RST) instead of an instant "connection refused" - a strong tell that a firewall, not the application, is the cause.
+
+**Fix:** Explicitly allow the port from the Docker bridge subnet: `sudo ufw allow from <bridge-subnet> to any port 9100 proto tcp` (find the subnet with `docker network inspect <project>_default`). Scope the source to the bridge subnet, not the internet at large. The rule is required permanently, not just for one-off testing - Prometheus scrapes the same path on every scrape interval. To remove a rule added with the wrong subnet, either repeat the exact spec with `delete` prepended (`sudo ufw delete allow from <subnet> to any port 9100 proto tcp`; the comment is not part of the match), or find it with `sudo ufw status numbered` and run `sudo ufw delete <number>`.
+
+---
+
 ### Hardcoded credentials in Docker Compose default values end up in version control
 
 
@@ -127,6 +137,16 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### `webhook` container without `init: true` accumulates zombie processes
+
+**Symptom:** `sudo` login banner reported a growing number of zombie processes on the host (e.g. "There are 23 zombie processes."), with no crashing service and no visible error anywhere.
+
+**Gotcha:** The `webhook` service in `deploy/docker-compose.yaml` had no `init: true`, so the `webhook` Go binary itself ran as PID 1 inside its container. A plain binary running as PID 1 only reaps the direct children it explicitly forked - it does not reap arbitrary orphaned/reparented processes the way a real init system does. Every deploy trigger runs `redeploy.sh`, which chains `git pull`, `docker compose pull`, and `docker compose up -d` - each forking further subprocesses (git helpers, the docker CLI, credential helpers). Any subprocess that got orphaned mid-chain was reparented to PID 1 and never reaped, accumulating as a permanent zombie. Since Docker's PID namespace is visible from the host's root namespace, these zombies counted toward the host-wide count shown at SSH login, even though the process tree itself was entirely inside the `webhook` container.
+
+**Fix:** Add `init: true` to the `webhook` service in `deploy/docker-compose.yaml`. This makes Docker insert `tini` as the container's actual PID 1, which correctly reaps orphaned descendants. Apply on the server with `docker compose -f deploy/docker-compose.yaml --env-file .env up -d --no-deps webhook` (recreates only that container, matching the "config-only diff" rule from the entry above).
+
+---
+
 ## OpenTelemetry and Observability
 
 ### Port 4317 is gRPC-only; sending HTTP/1.x traces there gives "malformed HTTP response"
@@ -137,6 +157,19 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 **Gotcha:** The OTLP standard uses two ports: 4317 for gRPC (HTTP/2, binary) and 4318 for HTTP (HTTP/1.x or HTTP/2, JSON or protobuf). Caddy's OTel SDK sends HTTP/1.x. Pointing it at 4317 produces a confusing "malformed HTTP response" error that doesn't clearly indicate a protocol mismatch.
 
 **Fix:** Use port 4318 for any client sending OTLP over HTTP.
+
+---
+
+### Grafana's Goroutines/Memory/GC panels and Collector Health panels showed permanent "No data"
+
+**Symptom:** On the default Grafana dashboard (`deploy/grafana/provisioning/dashboards/zaas-overview.json`), the Goroutines, Memory Usage, and GC Pause Duration panels, plus all four panels under Collector Health, always showed "No data" - not intermittently, on every load, regardless of how long the stack had been running.
+
+**Gotcha:** Two independent causes, both scrape-target problems rather than "nothing happened yet":
+
+1. The Goroutines/Memory/GC panels query `go_goroutines`, `go_memstats_alloc_bytes`, `go_memstats_sys_bytes`, and `go_gc_duration_seconds_sum` on `job="zaas-api"`. Prometheus scrapes `api:8080/metrics` successfully, but `api/internal/telemetry/telemetry.go` builds that endpoint from a fresh `prometheus.NewRegistry()` and only registers the OTel-to-Prometheus bridge exporter. Unlike `prometheus.DefaultRegisterer`, a fresh registry does not auto-include Go runtime or process metrics - `collectors.NewGoCollector()` and `collectors.NewProcessCollector()` must be registered explicitly, and nothing did. The metric names simply never existed in the scrape output.
+2. The Collector Health panels query `otelcol_*` and `process_resident_memory_bytes{job="otel-collector"}`, scraped from `otel-collector:8888` (`deploy/prometheus.yaml`). The OTel Collector's self-telemetry Prometheus reader defaults to binding `localhost:8888` inside its own container. Prometheus runs in a sibling container and reaches it via the Docker DNS name `otel-collector`, which resolves to the container's external interface, not loopback - so every scrape of that target failed silently (target down), and none of the four panels ever had data.
+
+**Fix:** In `telemetry.go`, register `collectors.NewGoCollector()` and `collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})` on the same `promReg` used by the OTel bridge exporter. In `deploy/otel-collector.yaml`, add an explicit `service.telemetry.metrics.readers` pull exporter with `host: 0.0.0.0` (not the default `localhost`) so the self-telemetry endpoint is reachable from other containers.
 
 ---
 
