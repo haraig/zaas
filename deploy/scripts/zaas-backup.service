@@ -8,5 +8,6 @@ Type=oneshot
 User=deploy
 Group=deploy
 ExecStart=/opt/zaas/deploy/scripts/backup-postgres.sh
+ExecStopPost=/opt/zaas/deploy/scripts/backup-metrics.sh postgres /var/backups/zaas/daily 'zaas-*.sql.gz'
 StandardOutput=journal
 StandardError=journal

@@ -8,5 +8,6 @@ Type=oneshot
 User=deploy
 Group=deploy
 ExecStart=/opt/zaas/deploy/scripts/backup-volumes.sh
+ExecStopPost=/opt/zaas/deploy/scripts/backup-metrics.sh volumes /var/backups/zaas/volumes/daily '*.tar.gz'
 StandardOutput=journal
 StandardError=journal

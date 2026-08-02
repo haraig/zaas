@@ -164,3 +164,45 @@ groups:
         annotations:
           summary: "OTel Collector is down"
           description: "The otel-collector scrape target has been unreachable for 2 minutes. All telemetry is being lost."
+
+  - name: zaas.backup
+    rules:
+      # ── Backups ────────────────────────────────────────────────────────────
+      # Fed by deploy/scripts/backup-metrics.sh through the node_exporter
+      # textfile collector. backup="postgres" is the daily pg_dump, and
+      # backup="volumes" the daily Docker volume archives.
+
+      - alert: ZaasBackupFailed
+        expr: zaas_backup_last_run_success == 0
+        for: 5m
+        labels:
+          severity: warning
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-backup-stale
+        annotations:
+          summary: "ZaaS {{ $labels.backup }} backup run failed"
+          description: "The last {{ $labels.backup }} backup exited non-zero. The previous successful backup is still on disk - check journalctl -u zaas-backup.service -u zaas-backup-volumes.service."
+
+      - alert: ZaasBackupStale
+        expr: >
+          time() - zaas_backup_last_success_timestamp_seconds > 93600
+        for: 15m
+        labels:
+          severity: critical
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-backup-stale
+        annotations:
+          summary: "ZaaS {{ $labels.backup }} backup has not succeeded in over 26h"
+          description: "The last successful {{ $labels.backup }} backup was {{ $value | humanizeDuration }} ago. The daily timers run at 03:00 (postgres) and 03:30 (volumes)."
+
+      # A staleness rule on a series that was never created produces no data and
+      # never fires, so the absence of the metric needs its own alert.
+      - alert: ZaasBackupMetricsMissing
+        expr: >
+          absent(zaas_backup_last_success_timestamp_seconds{backup="postgres"})
+          or absent(zaas_backup_last_success_timestamp_seconds{backup="volumes"})
+        for: 1h
+        labels:
+          severity: warning
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-backup-stale
+        annotations:
+          summary: "ZaaS {{ $labels.backup }} backup metrics are missing"
+          description: "No zaas_backup_last_success_timestamp_seconds series for {{ $labels.backup }}. The backup may never have succeeded, or the node_exporter textfile collector is misconfigured - check node_textfile_scrape_error."
