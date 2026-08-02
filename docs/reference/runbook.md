@@ -849,14 +849,31 @@ history is 90 days - so Slack is the notification channel, not the alert archive
 Alertmanager does not expand environment variables in its config, so the URL cannot live in
 `.env`. It is read from a file instead:
 
+The Alertmanager container runs as uid **65534** (`nobody`), so the directory and file must be
+owned by that uid. Creating them as `root:root 0700` looks tighter but leaves Alertmanager
+unable to open its own secret - and, true to form, it fails silently at notify time rather
+than at startup.
+
 ```bash
-sudo install -d -o root -g root -m 0700 /opt/zaas/deploy/secrets
+# Owned by the container's uid, not root - 65534 cannot traverse a root-owned 0700 directory.
+sudo install -d -o 65534 -g 65534 -m 0700 /opt/zaas/deploy/secrets
 
 # printf, not echo: a trailing newline becomes part of the URL.
 printf '%s' 'https://hooks.slack.com/services/<workspace-id>/<channel-id>/<token>' \
   | sudo tee /opt/zaas/deploy/secrets/slack_api_url > /dev/null
 
+sudo chown 65534:65534 /opt/zaas/deploy/secrets/slack_api_url
 sudo chmod 0600 /opt/zaas/deploy/secrets/slack_api_url
+```
+
+Only uid 65534 and root can read it. On the host it shows as owned by `nobody`.
+
+Confirm the container can actually read it - this is the step that catches the permission
+mistake, and it needs no restart, since the file is read at notify time:
+
+```bash
+docker exec deploy-alertmanager-1 cat /etc/alertmanager/secrets/slack_api_url
+# -> the webhook URL, with no trailing newline
 ```
 
 `deploy/secrets/` is gitignored, so the secret never enters the repository, and
@@ -892,9 +909,15 @@ waiting for a real one:
 ```bash
 docker exec deploy-alertmanager-1 amtool alert add ZaasSlackTest \
   severity=warning \
-  --annotation=description="Delivery test - safe to ignore." \
+  --annotation='description="Delivery test - safe to ignore."' \
   --alertmanager.url=http://localhost:9093
 ```
+
+The annotation value is double-quoted **inside** the argument. `amtool` parses these with the
+UTF-8 matchers parser, which needs quoting for any value containing spaces or punctuation;
+without it you get a `level=WARN ... incompatible` line and a fallback to the classic parser.
+The alert is still submitted either way, and the annotation is identical - the quoting just
+keeps the output clean.
 
 A yellow `[FIRING] ZaasSlackTest` message should reach the channel within ~30 seconds
 (`group_wait`). It clears itself after five minutes, and the `[RESOLVED]` message follows one
