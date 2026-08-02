@@ -24,6 +24,7 @@ Follow these steps in order when setting up a new server from scratch.
 10. [Redis: Production .env Configuration](#10-redis-production-env-configuration)
 11. [Node Exporter: Host Metrics](#11-node-exporter-host-metrics)
 12. [Offsite Backups: Read-Only Reader Account](#12-offsite-backups-read-only-reader-account)
+13. [Slack Alert Notifications](#13-slack-alert-notifications)
 
 ### Part 2: Operational Procedures
 
@@ -52,6 +53,7 @@ Procedures for responding to Prometheus alerts. Each section corresponds to an a
 - [ZaasRedisDown](#zaas-redis-down)
 - [ZaasCollectorDroppedSpans / ZaasCollectorDroppedMetrics / ZaasCollectorDroppedLogs / ZaasCollectorDown](#zaas-collector-dropped-data)
 - [ZaasBackupFailed / ZaasBackupStale / ZaasBackupMetricsMissing](#zaas-backup-stale)
+- [ZaasWatchdog](#zaas-watchdog)
 - [PostgreSQL: Restore from pg_dump](#postgresql-restore-from-pg_dump)
 - [Docker Volumes: Restore from tar backup](#docker-volumes-restore-from-tar-backup)
 - [Full Server Loss: Rebuild from Offsite](#full-server-loss-rebuild-from-offsite)
@@ -768,6 +770,100 @@ Then set up the pull itself - see [Offsite Backups: Manual Pull](#offsite-backup
 
 ---
 
+## 13. Slack Alert Notifications
+
+Without this section every Prometheus alert - including `ZaasApiDown` and `ZaasBackupStale` -
+is visible only to someone who happens to open the Alertmanager UI. This delivers them to a
+Slack channel through an Incoming Webhook.
+
+Incoming Webhooks work on the Slack **Free** plan. Two Free-plan limits are worth knowing:
+the workspace is capped at 10 apps/integrations (this app counts as one), and message
+history is 90 days - so Slack is the notification channel, not the alert archive. Prometheus
+`/alerts` and the Alertmanager UI remain the record.
+
+### 13.1 Create the Slack app and webhook
+
+1. Go to <https://api.slack.com/apps> and choose **Create New App -> From scratch**.
+2. Name it (e.g. `ZaaS Alerts`) and pick the workspace.
+3. Open **Incoming Webhooks** and toggle **Activate Incoming Webhooks** on.
+4. Choose **Add New Webhook to Workspace**, select the target channel (e.g. `#zaas-alerts`),
+   and authorize.
+5. Copy the generated URL. It has the shape
+   `https://hooks.slack.com/services/<workspace-id>/<channel-id>/<token>`.
+
+> **Treat this URL as a password.** Anyone holding it can post to that channel. It is not
+> tied to a user account and cannot be scoped further; the only remediation for a leak is to
+> revoke the webhook in the Slack app config and issue a new one.
+
+### 13.2 Write the secret onto the server
+
+Alertmanager does not expand environment variables in its config, so the URL cannot live in
+`.env`. It is read from a file instead:
+
+```bash
+sudo install -d -o root -g root -m 0700 /opt/zaas/deploy/secrets
+
+# printf, not echo: a trailing newline becomes part of the URL.
+printf '%s' 'https://hooks.slack.com/services/<workspace-id>/<channel-id>/<token>' \
+  | sudo tee /opt/zaas/deploy/secrets/slack_api_url > /dev/null
+
+sudo chmod 0600 /opt/zaas/deploy/secrets/slack_api_url
+```
+
+`deploy/secrets/` is gitignored, so the secret never enters the repository, and
+`git pull --ff-only` in the redeploy flow does not touch it.
+
+### 13.3 Recreate Alertmanager
+
+The compose file gained a new bind mount for that directory. A new mount **is** a config
+diff, so unlike a change to a mounted file's contents this does recreate the container:
+
+```bash
+sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml \
+  --env-file /opt/zaas/.env up -d --no-deps alertmanager
+
+docker exec deploy-alertmanager-1 ls -l /etc/alertmanager/secrets
+# -> slack_api_url
+```
+
+Prometheus also needs to reload to pick up the `ZaasWatchdog` rule. `--web.enable-lifecycle`
+is not set, so restart it rather than POSTing to `/-/reload`:
+
+```bash
+sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml \
+  --env-file /opt/zaas/.env restart prometheus
+```
+
+### 13.4 Verify delivery
+
+**Do not skip this.** A missing or wrong secret file does not stop Alertmanager starting and
+logs nothing at all - delivery simply fails at send time. Test-fire an alert rather than
+waiting for a real one:
+
+```bash
+docker exec deploy-alertmanager-1 amtool alert add ZaasSlackTest \
+  severity=warning \
+  --annotation=description="Delivery test - safe to ignore." \
+  --alertmanager.url=http://localhost:9093
+```
+
+A yellow `[FIRING] ZaasSlackTest` message should reach the channel within ~30 seconds
+(`group_wait`). It clears itself after five minutes, and the `[RESOLVED]` message follows one
+`group_interval` (5m) later.
+
+Within roughly a minute of the Prometheus restart, a green **ZaaS alerting heartbeat**
+message should also arrive - that is `ZaasWatchdog`, which repeats once every 24h. Its whole
+purpose is that its *absence* tells you delivery has broken. See
+[ZaasWatchdog](#zaas-watchdog).
+
+### 13.5 Rotating the webhook
+
+Revoke the old webhook in the Slack app config, add a new one, then overwrite the file as in
+13.2. The file is read at notification time rather than at startup, so no restart should be
+needed - confirm with the 13.4 test-fire rather than assuming it.
+
+---
+
 # Part 2: Operational Procedures
 
 ## Restarting the Server
@@ -1465,6 +1561,59 @@ succeeds.
 
 `ZaasBackupFailed` stays firing until the **next** run succeeds, which by default is the
 following day. Re-running the unit by hand clears it sooner.
+
+---
+
+## ZaasWatchdog
+
+**Severity:** none
+**Condition:** `vector(1)` - always true, by design.
+
+**Symptom:** None. This alert is *supposed* to be firing at all times, and seeing it in
+Prometheus `/alerts` or the Alertmanager UI is normal. Do not silence it and do not try to
+make it stop.
+
+**What is actionable is its absence.** It delivers one green "ZaaS alerting heartbeat"
+message to Slack every 24 hours. If that message stops arriving, the alerting pipeline is
+broken - not the service. Every other alert in this runbook is being lost silently.
+
+**Why it exists:** if `slack_api_url_file` is missing or wrong, Alertmanager starts
+completely cleanly, logs nothing, and even passes `amtool check-config`. Delivery fails only
+at send time. Without a heartbeat there is no way to tell a broken webhook from a quiet week.
+
+**Diagnostic steps** (work top-down; each rules out one hop):
+
+```bash
+# 1. Is Prometheus evaluating the rule?
+#    http://<server-ip>:9090/alerts -> ZaasWatchdog should be FIRING
+
+# 2. Did Prometheus hand it to Alertmanager?
+#    http://<server-ip>:9093 -> ZaasWatchdog should be listed
+docker exec deploy-alertmanager-1 amtool alert \
+  --alertmanager.url=http://localhost:9093
+
+# 3. Is the secret actually present and readable in the container?
+docker exec deploy-alertmanager-1 ls -l /etc/alertmanager/secrets/slack_api_url
+
+# 4. Did Alertmanager try and fail to notify? This is where a bad URL shows up.
+docker logs deploy-alertmanager-1 --since 24h 2>&1 | grep -i "notify\|slack\|error"
+
+# 5. Is the config still what you think it is?
+docker exec deploy-alertmanager-1 amtool check-config /etc/alertmanager/alertmanager.yaml
+docker exec deploy-alertmanager-1 amtool config routes test \
+  --config.file=/etc/alertmanager/alertmanager.yaml severity=none
+# -> slack-watchdog
+```
+
+**Remediation:**
+
+- Secret file missing after a server rebuild: redo [section 13.2](#13-slack-alert-notifications).
+- Trailing newline in the URL (the classic `echo` mistake): rewrite it with `printf`.
+- Slack revoked or rotated the webhook: issue a new one and update the file.
+- An accidental silence covering `severity="none"`: remove it in the Alertmanager UI.
+
+Confirm the fix with the test-fire in section 13.4 rather than waiting 24h for the next
+heartbeat.
 
 ---
 
