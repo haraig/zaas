@@ -147,6 +147,36 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 
 ---
 
+### BusyBox `tar` silently lacks `--numeric-owner`, so an `alpine` helper corrupts volume ownership
+
+**Symptom:** A volume restored from a `tar` archive comes back with wrong file ownership, and the service (Grafana, Alertmanager) fails to start or cannot write its own data - even though the backup and restore both reported success.
+
+**Gotcha:** The obvious helper image for tarring a Docker volume is `alpine`, but its `tar` is BusyBox, which does not implement `--numeric-owner`. Grafana runs as uid 472 and Alertmanager as uid 65534, and neither name resolves inside the helper container, so ownership is written by *name*, fails to resolve, and silently falls back to root on extract. Nothing errors: the archive is valid, only its ownership metadata is wrong.
+
+**Fix:** `deploy/scripts/backup-volumes.sh` pins a GNU-tar image (`debian:13-slim`, by digest) and passes `--numeric-owner` on both create and extract. The restore procedure in the runbook uses the same image for the same reason.
+
+---
+
+### A new SSH user is rejected before authentication by the cloud-init `AllowUsers` hardening
+
+**Symptom:** A freshly created account with a correct `authorized_keys` file cannot log in. `ssh -v` reports `Permission denied (publickey)`, which points at the key - the key is fine.
+
+**Gotcha:** `infra/tofu/modules/hcloud_server/user_data.yaml.tftpl` writes `/etc/ssh/sshd_config.d/ssh-hardening.conf` containing `AllowUsers ${user_name}`. `AllowUsers` is an allowlist evaluated *before* authentication, so any user not on it is refused regardless of credentials, and the error message never mentions the allowlist. Editing that file directly is also wrong - cloud-init rewrites it on a server rebuild.
+
+**Fix:** Add a separate drop-in listing every permitted user, e.g. `/etc/ssh/sshd_config.d/zz-backup-reader.conf` with `AllowUsers deploy zaasbackup`. `AllowUsers` is first-match-wins across the merged config and drop-ins are read in lexical order, so the `zz-` prefix matters. Confirm with `sudo sshd -T | grep allowusers` before restarting sshd, and keep an existing session open while doing it.
+
+---
+
+### With `rrsync`, remote paths are relative to the locked root, not the filesystem root
+
+**Symptom:** An `rsync` pull through an `rrsync`-restricted SSH key fails on what looks like a perfectly correct absolute path.
+
+**Gotcha:** A forced command of `command="/usr/bin/rrsync -ro /var/backups/zaas"` chroots the transfer to that directory in path terms. Passing `host:/var/backups/zaas/` then resolves to `/var/backups/zaas/var/backups/zaas/` and fails. The correct source is `host:/`, which reads as "the filesystem root" but means the locked directory.
+
+**Fix:** Use `"${USER}@${HOST}:/"` as the rsync source (`deploy/scripts/pull-backups.sh`). Note too that `rrsync` must exist at the exact path named in the forced command - rsync >= 3.2.4 installs it at `/usr/bin/rrsync`, older packagings leave it under `/usr/share/doc/rsync/scripts/`.
+
+---
+
 ## OpenTelemetry and Observability
 
 ### Port 4317 is gRPC-only; sending HTTP/1.x traces there gives "malformed HTTP response"
@@ -187,6 +217,26 @@ Each entry explains the error type, the symptom, why it was non-obvious, and wha
 ### OTel filelog receiver: Docker JSON log timestamp format mismatch
 
 Covered above in the "OTel Collector needs root" entry (`e2bcb39`) - the timestamp format issue (`%L` vs `%f`) is part of the same commit.
+
+---
+
+### `--collector.disable-defaults` means `--collector.textfile.directory` alone enables nothing
+
+**Symptom:** `.prom` files are written into the textfile directory and look correct, but none of their metrics appear at `:9100/metrics` or in Prometheus. No error is logged.
+
+**Gotcha:** Node Exporter on this host runs with `--collector.disable-defaults` plus an explicit collector list (`docs/reference/runbook.md` section 11.3), which turns *every* collector off including `textfile`. `--collector.textfile.directory` only configures the collector; it does not enable it. The flag is accepted without complaint, so the configuration looks right.
+
+**Fix:** Pass both `--collector.textfile` and `--collector.textfile.directory=...`. Related: if any `.prom` file in the directory fails to parse, node_exporter sets `node_textfile_scrape_error 1` and drops **all** textfile metrics, not just the malformed one - which is why `deploy/scripts/backup-metrics.sh` writes to a temporary file and renames it into place, and why the same script emits both backup jobs so their HELP and TYPE text cannot diverge.
+
+---
+
+### A `job` label in a textfile metric is silently renamed `exported_job`
+
+**Symptom:** A custom metric written with `{job="postgres"}` shows up in Prometheus as `{job="node-exporter", exported_job="postgres"}`, so every query and alert written against the intended label matches nothing.
+
+**Gotcha:** Prometheus attaches the scrape target's own `job` and `instance` labels to everything it scrapes. When an exposed metric already carries one of those names, the default `honor_labels: false` keeps the target's value and prefixes the original with `exported_`. Nothing warns about the collision, and the metric is still present - just under a label name nobody queried.
+
+**Fix:** Never use `job` (or `instance`) as a label name in textfile metrics. `deploy/scripts/backup-metrics.sh` uses `backup="postgres"` / `backup="volumes"` instead.
 
 ---
 

@@ -170,6 +170,24 @@ Node Exporter exposes host-level system metrics. It runs as a systemd service on
 | `netdev` | `node_network_receive_bytes_total` | Network I/O |
 | `loadavg` | `node_load1`, `node_load5`, `node_load15` | System load |
 | `stat` | `node_boot_time_seconds` | Uptime |
+| `textfile` | `zaas_backup_*`, `node_textfile_scrape_error` | Backup freshness and outcome |
+
+Node Exporter runs with `--collector.disable-defaults`, so each collector above is enabled explicitly. `textfile` needs two flags rather than one: `--collector.textfile` to enable it and `--collector.textfile.directory=/var/lib/node_exporter/textfile_collector` to point it at the drop directory.
+
+### Backup metrics
+
+`deploy/scripts/backup-metrics.sh` runs as `ExecStopPost=` on both backup units and writes one `.prom` file per backup job into the textfile directory. The `backup` label is either `postgres` or `volumes`.
+
+| Metric | Type | Meaning |
+| ------ | ---- | ------- |
+| `zaas_backup_last_run_timestamp_seconds` | gauge | Unix time of the last run, successful or not |
+| `zaas_backup_last_run_success` | gauge | 1 if the last run succeeded, 0 if it failed |
+| `zaas_backup_last_success_timestamp_seconds` | gauge | Unix time of the last successful run |
+| `zaas_backup_last_success_bytes` | gauge | Total bytes written by the last successful run |
+
+The last two are carried forward across a failed run, so a failure never erases the record of the last good backup. They are absent entirely until the first success, which is what `ZaasBackupMetricsMissing` detects.
+
+The label is `backup` rather than `job` because Prometheus's own scrape `job` label takes precedence and a `job` label in a textfile metric is silently renamed `exported_job`.
 
 Useful PromQL queries:
 
@@ -188,6 +206,9 @@ rate(node_network_receive_bytes_total{device="eth0"}[5m])
 
 # System uptime
 time() - node_boot_time_seconds
+
+# Age of the last successful backup, per backup job
+time() - zaas_backup_last_success_timestamp_seconds
 ```
 
 Installation instructions: see [runbook section 11](runbook.md#11-node-exporter-host-metrics).
