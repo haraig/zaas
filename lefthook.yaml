@@ -17,6 +17,9 @@ pre-commit:
     vet:
       glob: "api/**/*.go"
       run: cd api && go vet ./...
+    docs-links:
+      glob: "{docs/**/*.md,*.md,deploy/prometheus.rules.yaml}"
+      run: ./scripts/check-doc-links.py
 
 pre-push:
   commands:
