@@ -2,7 +2,9 @@
 # Loaded by prometheus.yaml via rule_files.
 # Every rule carries severity and runbook_url labels.
 # runbook_url points at the corresponding playbook section in docs/reference/runbook.md
-# (served at https://zaas.at/docs or via the repo).
+# on GitHub. The runbook is not served by the website, so the anchors must match
+# the ones GitHub generates from the headings: lowercase, punctuation stripped
+# (## ZaasApiDown -> #zaasapidown). scripts/check-doc-links.py verifies this.
 
 groups:
   - name: zaas.api
@@ -14,7 +16,7 @@ groups:
         for: 2m
         labels:
           severity: critical
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-api-down
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaasapidown
         annotations:
           summary: "ZaaS API is down"
           description: "The zaas-api scrape target has been unreachable for more than 2 minutes."
@@ -30,7 +32,7 @@ groups:
         for: 5m
         labels:
           severity: critical
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-high-error-rate
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaashigherrorrate
         annotations:
           summary: "ZaaS API 5xx error rate above 5%"
           description: "5xx responses account for {{ $value | humanizePercentage }} of traffic over the last 5 minutes."
@@ -45,7 +47,7 @@ groups:
         for: 5m
         labels:
           severity: warning
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-high-p99-latency
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaashighp99latency
         annotations:
           summary: "ZaaS API p99 latency above 1 second"
           description: "99th-percentile response time is {{ $value | humanizeDuration }} over the last 5 minutes."
@@ -59,7 +61,7 @@ groups:
         for: 5m
         labels:
           severity: warning
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-high-rate-limit-rate
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaashighratelimitrate
         annotations:
           summary: "ZaaS API rate-limit rejections above 10/s"
           description: "The API is returning 429 Too Many Requests at {{ $value | humanize }} req/s - possible abuse or misconfiguration."
@@ -76,7 +78,7 @@ groups:
         for: 5m
         labels:
           severity: warning
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-disk-space-low
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaasdiskspacelow
         annotations:
           summary: "Disk space below 10% on {{ $labels.instance }}"
           description: "Available disk is {{ $value | humanizePercentage }} on mountpoint {{ $labels.mountpoint }}."
@@ -89,7 +91,7 @@ groups:
         for: 2m
         labels:
           severity: critical
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-disk-space-low
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaasdiskspacelow
         annotations:
           summary: "Disk space critically low (< 5%) on {{ $labels.instance }}"
           description: "Available disk is {{ $value | humanizePercentage }} on mountpoint {{ $labels.mountpoint }}. Immediate action required."
@@ -101,7 +103,7 @@ groups:
         for: 2m
         labels:
           severity: critical
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-postgres-down
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaaspostgresdown
         annotations:
           summary: "ZaaS PostgreSQL exporter is down"
           description: "The postgres-exporter scrape target has been unreachable for more than 2 minutes. PostgreSQL may be down."
@@ -113,7 +115,7 @@ groups:
         for: 2m
         labels:
           severity: critical
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-redis-down
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaasredisdown
         annotations:
           summary: "ZaaS Redis exporter is down"
           description: "The redis-exporter scrape target has been unreachable for more than 2 minutes. Redis may be down."
@@ -128,7 +130,7 @@ groups:
         for: 5m
         labels:
           severity: warning
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-collector-dropped-data
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaascollectordroppeddata
         annotations:
           summary: "OTel Collector is dropping spans"
           description: "The Collector is failing to export {{ $value | humanize }} spans/s. Check Tempo connectivity and Collector logs."
@@ -139,7 +141,7 @@ groups:
         for: 5m
         labels:
           severity: warning
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-collector-dropped-data
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaascollectordroppeddata
         annotations:
           summary: "OTel Collector is dropping metric points"
           description: "The Collector is failing to export {{ $value | humanize }} metric points/s. Check Prometheus remote-write connectivity."
@@ -150,7 +152,7 @@ groups:
         for: 5m
         labels:
           severity: warning
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-collector-dropped-data
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaascollectordroppeddata
         annotations:
           summary: "OTel Collector is dropping log records"
           description: "The Collector is failing to export {{ $value | humanize }} log records/s. Check Loki connectivity."
@@ -160,7 +162,7 @@ groups:
         for: 2m
         labels:
           severity: critical
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-collector-dropped-data
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaascollectordroppeddata
         annotations:
           summary: "OTel Collector is down"
           description: "The otel-collector scrape target has been unreachable for 2 minutes. All telemetry is being lost."
@@ -177,7 +179,7 @@ groups:
         for: 5m
         labels:
           severity: warning
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-backup-stale
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaasbackupstale
         annotations:
           summary: "ZaaS {{ $labels.backup }} backup run failed"
           description: "The last {{ $labels.backup }} backup exited non-zero. The previous successful backup is still on disk - check journalctl -u zaas-backup.service -u zaas-backup-volumes.service."
@@ -188,7 +190,7 @@ groups:
         for: 15m
         labels:
           severity: critical
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-backup-stale
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaasbackupstale
         annotations:
           summary: "ZaaS {{ $labels.backup }} backup has not succeeded in over 26h"
           description: "The last successful {{ $labels.backup }} backup was {{ $value | humanizeDuration }} ago. The daily timers run at 03:00 (postgres) and 03:30 (volumes)."
@@ -202,7 +204,7 @@ groups:
         for: 1h
         labels:
           severity: warning
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-backup-stale
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaasbackupstale
         annotations:
           summary: "ZaaS {{ $labels.backup }} backup metrics are missing"
           description: "No zaas_backup_last_success_timestamp_seconds series for {{ $labels.backup }}. The backup may never have succeeded, or the node_exporter textfile collector is misconfigured - check node_textfile_scrape_error."
@@ -220,7 +222,7 @@ groups:
         expr: vector(1)
         labels:
           severity: none
-          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaas-watchdog
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaaswatchdog
         annotations:
           summary: "ZaaS alerting pipeline is alive"
           description: "This alert always fires. If it stops arriving in Slack, alert delivery is broken - not the service."

@@ -274,6 +274,32 @@ Covered above in the "OTel Collector needs root" entry (`e2bcb39`) - the timesta
 
 ---
 
+### A bind-mounted secret created as `root:root 0700` is unreadable by a non-root container
+
+**Symptom:** `docker exec deploy-alertmanager-1 ls -l /etc/alertmanager/secrets` returns `ls: can't open '/etc/alertmanager/secrets': Permission denied`, even though the file exists on the host with exactly the permissions the documentation prescribed. Alertmanager itself starts cleanly and logs nothing.
+
+**Gotcha:** Most Prometheus-ecosystem images drop privileges. `prom/alertmanager` runs as uid **65534** (`nobody`); Grafana runs as **472**. A bind-mounted directory created `root:root` mode `0700` cannot be traversed by any of them - the tighter-looking permissions are precisely what breaks it. The instinct to lock a secret down to root is right on a normal host and wrong for a bind mount into an unprivileged container.
+
+It is easy to miss in testing, because a scratch directory created by your own user typically ends up `0755`/`0644`, which the container *can* read. The test then passes while the documented permissions would fail. Combined with the entry above - a secret Alertmanager cannot read fails silently at notify time, not at startup - this produces a stack that looks entirely healthy and delivers nothing.
+
+**Fix:** Own the directory and file by the container's uid rather than root, keeping the restrictive mode:
+
+```bash
+sudo install -d -o 65534 -g 65534 -m 0700 /opt/zaas/deploy/secrets
+sudo chown 65534:65534 /opt/zaas/deploy/secrets/slack_api_url
+sudo chmod 0600 /opt/zaas/deploy/secrets/slack_api_url
+```
+
+Then prove the container can read it, rather than inferring it from the host:
+
+```bash
+docker exec deploy-alertmanager-1 cat /etc/alertmanager/secrets/slack_api_url
+```
+
+Check the uid before choosing ownership - `docker run --rm --entrypoint sh <image> -c id` - since it differs per image. No restart is needed after a permission change: the file is read at notify time and the bind mount reflects host permissions immediately.
+
+---
+
 ## Go
 
 ### Go nil interface method calls panic at runtime with no compile-time warning

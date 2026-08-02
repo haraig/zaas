@@ -80,6 +80,26 @@ Conceptual background and design rationale.
 | [explanation/observability-concepts.md](explanation/observability-concepts.md) | What observability is, why OTel, how the three pillars fit together, application integration |
 | [explanation/migration-dynatrace.md](explanation/migration-dynatrace.md) | How to migrate the observability stack to Dynatrace and what would change |
 
+## Internal Links and Anchors
+
+Internal links are checked by `scripts/check-doc-links.py` (`make docs-check`, and a
+pre-commit hook scoped to docs). It verifies every `](#anchor)` and `](other.md#anchor)`
+link, plus every `runbook_url` label in `deploy/prometheus.rules.yaml`.
+
+**Anchors must match what GitHub generates from the heading**, because GitHub is the only
+thing that renders these files - `docs/` is not served by the website. The rule is:
+lowercase, strip everything except word characters, whitespace and hyphens, then replace
+whitespace runs with single hyphens.
+
+| Heading | Anchor |
+| ------- | ------ |
+| `## ZaasApiDown` | `#zaasapidown` |
+| `## 9. Backups: Timers and Metrics` | `#9-backups-timers-and-metrics` |
+| `## Accessing Internal Service UIs` | `#accessing-internal-service-uis` |
+
+Do not invent readable-but-wrong anchors such as `#zaas-api-down`; nothing generates them.
+Repeated identical headings get `-1`, `-2` suffixes, which the checker accounts for.
+
 ## Updating This Index
 
 When you add, rename, or remove a documentation file, update the table above in the same commit. The index must always reflect the actual state of the `docs/` directory.

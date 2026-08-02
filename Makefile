@@ -3,6 +3,7 @@ GOLANGCI_LINT_VERSION := v2.12.2
 .PHONY: all setup generate dev dev-minimal stop test fmt fmt-fix vet mod-tidy lint build web-build-docker clean distclean \
         web-dev web-build web-lint web-check \
         fmt-web fmt-web-fix fmt-all fmt-all-fix \
+        docs-check \
         infra-init infra-plan infra-apply infra-destroy
 
 # Run the full Go pipeline
@@ -118,6 +119,13 @@ web-lint:
 
 # Lint + build the web frontend
 web-check: web-lint web-build
+
+# ── Docs QA ──
+
+# Verify internal documentation anchors resolve (also checks runbook_url labels
+# in deploy/prometheus.rules.yaml). Anchors must match what GitHub generates.
+docs-check:
+	./scripts/check-doc-links.py
 
 # ── Cleanup ──
 

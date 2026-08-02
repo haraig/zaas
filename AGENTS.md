@@ -27,6 +27,7 @@ make web-build  # Build Astro static site
 make web-build-docker # Build Astro static site inside Docker
 make web-lint   # Run astro check (TypeScript diagnostics)
 make web-check  # web-lint + web-build
+make docs-check # Verify internal documentation anchors resolve
 make fmt        # Check Go formatting
 make fmt-fix    # Auto-fix Go formatting
 make fmt-web    # Check web formatting (Prettier)
@@ -108,6 +109,8 @@ zaas/
 │       ├── design-decisions.md         # Why the API is built the way it is
 │       ├── observability-concepts.md   # OTel concepts, push/pull, application integration
 │       └── migration-dynatrace.md      # How to migrate the observability stack to Dynatrace
+├── scripts/                    # Repo tooling (not deployed; cf. deploy/scripts/)
+│   └── check-doc-links.py      # Verifies internal doc anchors and runbook_url labels
 ├── .env.example                # All env vars documented with defaults
 ├── Makefile                    # Developer convenience targets
 └── README.md
@@ -154,6 +157,7 @@ lefthook runs these checks automatically:
 | ----- | ------ | ---------- |
 | `commit-msg` | commitlint (Conventional Commits format) | Fix the commit message format; see `CONTRIBUTING.md` for accepted types |
 | `pre-commit` | `gofmt`, `go vet` | Run `make fmt-fix` then `make vet` |
+| `pre-commit` | doc link check (only when docs or `prometheus.rules.yaml` change) | Run `make docs-check` - the failure output suggests the correct anchor |
 | `pre-push` | `golangci-lint`, `go test ./...` | Run `make lint` then `make test` |
 
 If a hook rejects your commit, **fix the underlying issue** - do not use `--no-verify`.
