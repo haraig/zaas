@@ -120,6 +120,23 @@ groups:
           summary: "ZaaS Redis exporter is down"
           description: "The redis-exporter scrape target has been unreachable for more than 2 minutes. Redis may be down."
 
+      # ── Node Exporter ─────────────────────────────────────────────────────
+
+      # node_exporter is a host systemd service, not a compose service, so a
+      # redeploy never restarts it and nothing else notices it is gone. While it
+      # is down the disk-space alerts above evaluate to no data and stay silent,
+      # and the backup metrics disappear - ZaasBackupMetricsMissing then fires an
+      # hour later as a misleading proxy for this.
+      - alert: ZaasNodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          runbook_url: https://github.com/haraig/zaas/blob/main/docs/reference/runbook.md#zaasnodeexporterdown
+        annotations:
+          summary: "Node Exporter is down"
+          description: "The node-exporter scrape target has been unreachable for 2 minutes. Host metrics are gone and the disk-space alerts are blind. Check systemctl status node_exporter and the UFW rule for port 9100."
+
   - name: zaas.collector
     rules:
       # ── OTel Collector data loss ───────────────────────────────────────────

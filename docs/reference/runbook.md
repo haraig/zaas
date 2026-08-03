@@ -1581,6 +1581,65 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 
 ---
 
+## ZaasNodeExporterDown
+
+**Severity:** warning
+**Condition:** `up{job="node-exporter"} == 0` for 2 minutes.
+
+**Symptom:** Host metrics stop. No user-facing impact - the API keeps serving - but the
+Grafana CPU, memory, disk and network panels go empty, and **the disk-space alerts go
+blind**: `ZaasDiskSpaceLow` and `ZaasDiskSpaceCritical` evaluate to no data, which never
+fires. A filling disk will not alert while this is unresolved, so treat it as time-boxed
+rather than deferrable.
+
+`ZaasBackupMetricsMissing` will also fire an hour later, because the backup metrics reach
+Prometheus through this exporter's textfile collector. If both alerts are firing, this is the
+cause and the backup alert is a symptom.
+
+**Likely causes:**
+- The service is stopped, crashed, or was never installed (section 11). It is a host systemd
+  service, not a compose service, so a redeploy neither restarts nor notices it.
+- The UFW rule for port 9100 is missing, was scoped to the wrong subnet, or the Docker bridge
+  subnet changed. UFW *drops* rather than refuses, so the scrape hangs until timeout instead
+  of failing fast - see [section 11.5](#115-allow-the-docker-bridge-network-through-the-firewall).
+- The server was rebuilt and section 11 was not re-run.
+
+**Diagnostic steps:**
+
+```bash
+# Is the service running at all?
+systemctl status node_exporter
+
+# Does it answer locally? (rules the process in or out before looking at the firewall)
+curl -s --max-time 5 http://localhost:9100/metrics | head -3
+
+# Can the Prometheus container reach it? A hang here rather than an error means UFW.
+docker exec deploy-prometheus-1 wget -qO- --timeout=5 http://host.docker.internal:9100/metrics | head -3
+
+# Is the firewall rule still present, and does it still match the bridge subnet?
+sudo ufw status numbered | grep 9100
+docker network inspect deploy_default | grep Subnet
+```
+
+**Remediation:**
+
+```bash
+# Service stopped or crashed
+sudo systemctl restart node_exporter
+journalctl -u node_exporter --no-pager -n 50
+
+# Not installed, or the server was rebuilt: work section 11 end to end
+# (install, user, unit, enable, and the UFW rule - all four are required)
+
+# Firewall rule missing or pointing at the wrong subnet
+sudo ufw allow from <bridge-subnet> to any port 9100 proto tcp comment 'node_exporter for prometheus container'
+```
+
+Confirm the fix on the Prometheus targets page (`http://localhost:9090/targets`, through the
+SSH tunnel) rather than by waiting for the alert to resolve.
+
+---
+
 ## ZaasCollectorDroppedData
 
 **Severity:** warning (dropped data) / critical (collector down)
@@ -1639,6 +1698,10 @@ Covers `ZaasBackupFailed`, `ZaasBackupStale` and `ZaasBackupMetricsMissing`.
 broken in production yet - this alert exists so a bad restore is not the first sign.
 
 **Likely causes:**
+- node_exporter is down, so the metrics never reach Prometheus. If **both** backups' metrics
+  are missing at once, check [ZaasNodeExporterDown](#zaasnodeexporterdown) first - two
+  independently scheduled backups rarely fail in the same instant, but one dead exporter
+  takes out both.
 - The backup script failed: PostgreSQL container down, Docker unavailable, disk full.
 - The timer is disabled or was never enabled (`ZaasBackupMetricsMissing`).
 - The unit files were changed in git but never re-copied to `/etc/systemd/system/`.
