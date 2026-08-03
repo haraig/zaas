@@ -603,7 +603,7 @@ sudo useradd --system --no-create-home --shell /usr/sbin/nologin node_exporter
 ### 11.3 Create systemd service unit
 
 ```bash
-sudo cat > /etc/systemd/system/node_exporter.service << 'EOF'
+sudo tee /etc/systemd/system/node_exporter.service > /dev/null << 'EOF'
 [Unit]
 Description=Prometheus Node Exporter
 Documentation=https://github.com/prometheus/node_exporter
@@ -632,6 +632,19 @@ RestartSec=5s
 [Install]
 WantedBy=multi-user.target
 EOF
+```
+
+`sudo tee` rather than `sudo cat >`: the redirection is performed by your own shell before
+`sudo` runs, so `sudo cat > /etc/...` fails with permission denied as a non-root user. Copy
+the whole block, including the `EOF`, rather than assembling `ExecStart` by hand - a dropped
+flag here is silent, and the one it costs you is usually `--collector.textfile`.
+
+Confirm the flags that matter survived the write, before enabling the service:
+
+```bash
+grep -c '^  --collector.textfile' /etc/systemd/system/node_exporter.service
+# -> 2   (the collector and its directory - see the note below on why one without
+#         the other silently does nothing)
 ```
 
 > **Why `--collector.disable-defaults` with explicit collectors?** This avoids hundreds of low-value metrics (systemd units, NFS, hardware sensors, etc.) and keeps Prometheus cardinality low. The selected collectors cover all the metrics used by the Grafana dashboard.
