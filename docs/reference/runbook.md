@@ -947,6 +947,35 @@ Revoke the old webhook in the Slack app config, add a new one, then overwrite th
 13.2. The file is read at notification time rather than at startup, so no restart should be
 needed - confirm with the 13.4 test-fire rather than assuming it.
 
+### 13.6 Changing the Alertmanager external URL
+
+`--web.external-url` in `deploy/docker-compose.yaml` sets how Alertmanager refers to itself
+when it builds a link, and it defaults to `http://localhost:9093` via
+`ZAAS_ALERTMANAGER_EXTERNAL_URL`. That value is correct as long as the service stays bound to
+`127.0.0.1` and is reached through the tunnel in
+[Accessing Internal Service UIs](#accessing-internal-service-uis). Change it only if the
+access path changes, and keep it path-free - a path component also becomes the route prefix
+Alertmanager serves its own UI under, which is untested here.
+
+The flag affects link generation only. It opens no port, and the loopback binding remains
+what governs reachability.
+
+Applying a change is manual. The redeploy webhook (`deploy/webhook/redeploy.sh`) runs
+`up -d --no-deps api caddy`, so a push to `main` puts the new compose file on the server
+without touching Alertmanager. A changed `command:` is a config diff, so this recreates the
+container:
+
+```bash
+sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml \
+  --env-file /opt/zaas/.env up -d --no-deps alertmanager
+
+docker inspect --format '{{json .Config.Cmd}}' deploy-alertmanager-1
+# -> the flag with its resolved value, not an empty string
+```
+
+Then confirm the UI still loads at `http://localhost:9093` through the tunnel, and test-fire
+per 13.4. Active silences survive the recreate - they live in `alertmanager_data`.
+
 ---
 
 # Part 2: Operational Procedures

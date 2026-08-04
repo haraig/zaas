@@ -243,6 +243,14 @@ services:
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yaml"
       - "--storage.path=/alertmanager"
+      # How Alertmanager refers to itself when it builds a link. Unset, it falls
+      # back to the container's own hostname, which is the container ID, so
+      # every generated URL points somewhere that resolves nowhere. This is a
+      # string used for link generation only: it opens no port and changes no
+      # listener, and the loopback binding above still governs what is
+      # reachable. Keep the value path-free - a path component would also become
+      # the route prefix Alertmanager serves its own UI under.
+      - "--web.external-url=${ZAAS_ALERTMANAGER_EXTERNAL_URL:-http://localhost:9093}"
     depends_on:
       - prometheus
 
