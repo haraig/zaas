@@ -603,7 +603,7 @@ sudo useradd --system --no-create-home --shell /usr/sbin/nologin node_exporter
 ### 11.3 Create systemd service unit
 
 ```bash
-sudo cat > /etc/systemd/system/node_exporter.service << 'EOF'
+sudo tee /etc/systemd/system/node_exporter.service > /dev/null << 'EOF'
 [Unit]
 Description=Prometheus Node Exporter
 Documentation=https://github.com/prometheus/node_exporter
@@ -632,6 +632,19 @@ RestartSec=5s
 [Install]
 WantedBy=multi-user.target
 EOF
+```
+
+`sudo tee` rather than `sudo cat >`: the redirection is performed by your own shell before
+`sudo` runs, so `sudo cat > /etc/...` fails with permission denied as a non-root user. Copy
+the whole block, including the `EOF`, rather than assembling `ExecStart` by hand - a dropped
+flag here is silent, and the one it costs you is usually `--collector.textfile`.
+
+Confirm the flags that matter survived the write, before enabling the service:
+
+```bash
+grep -c '^  --collector.textfile' /etc/systemd/system/node_exporter.service
+# -> 2   (the collector and its directory - see the note below on why one without
+#         the other silently does nothing)
 ```
 
 > **Why `--collector.disable-defaults` with explicit collectors?** This avoids hundreds of low-value metrics (systemd units, NFS, hardware sensors, etc.) and keeps Prometheus cardinality low. The selected collectors cover all the metrics used by the Grafana dashboard.
@@ -933,6 +946,35 @@ purpose is that its *absence* tells you delivery has broken. See
 Revoke the old webhook in the Slack app config, add a new one, then overwrite the file as in
 13.2. The file is read at notification time rather than at startup, so no restart should be
 needed - confirm with the 13.4 test-fire rather than assuming it.
+
+### 13.6 Changing the Alertmanager external URL
+
+`--web.external-url` in `deploy/docker-compose.yaml` sets how Alertmanager refers to itself
+when it builds a link, and it defaults to `http://localhost:9093` via
+`ZAAS_ALERTMANAGER_EXTERNAL_URL`. That value is correct as long as the service stays bound to
+`127.0.0.1` and is reached through the tunnel in
+[Accessing Internal Service UIs](#accessing-internal-service-uis). Change it only if the
+access path changes, and keep it path-free - a path component also becomes the route prefix
+Alertmanager serves its own UI under, which is untested here.
+
+The flag affects link generation only. It opens no port, and the loopback binding remains
+what governs reachability.
+
+Applying a change is manual. The redeploy webhook (`deploy/webhook/redeploy.sh`) runs
+`up -d --no-deps api caddy`, so a push to `main` puts the new compose file on the server
+without touching Alertmanager. A changed `command:` is a config diff, so this recreates the
+container:
+
+```bash
+sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml \
+  --env-file /opt/zaas/.env up -d --no-deps alertmanager
+
+docker inspect --format '{{json .Config.Cmd}}' deploy-alertmanager-1
+# -> the flag with its resolved value, not an empty string
+```
+
+Then confirm the UI still loads at `http://localhost:9093` through the tunnel, and test-fire
+per 13.4. Active silences survive the recreate - they live in `alertmanager_data`.
 
 ---
 
@@ -1581,6 +1623,65 @@ sudo -u deploy docker compose -f /opt/zaas/deploy/docker-compose.yaml --env-file
 
 ---
 
+## ZaasNodeExporterDown
+
+**Severity:** warning
+**Condition:** `up{job="node-exporter"} == 0` for 2 minutes.
+
+**Symptom:** Host metrics stop. No user-facing impact - the API keeps serving - but the
+Grafana CPU, memory, disk and network panels go empty, and **the disk-space alerts go
+blind**: `ZaasDiskSpaceLow` and `ZaasDiskSpaceCritical` evaluate to no data, which never
+fires. A filling disk will not alert while this is unresolved, so treat it as time-boxed
+rather than deferrable.
+
+`ZaasBackupMetricsMissing` will also fire an hour later, because the backup metrics reach
+Prometheus through this exporter's textfile collector. If both alerts are firing, this is the
+cause and the backup alert is a symptom.
+
+**Likely causes:**
+- The service is stopped, crashed, or was never installed (section 11). It is a host systemd
+  service, not a compose service, so a redeploy neither restarts nor notices it.
+- The UFW rule for port 9100 is missing, was scoped to the wrong subnet, or the Docker bridge
+  subnet changed. UFW *drops* rather than refuses, so the scrape hangs until timeout instead
+  of failing fast - see [section 11.5](#115-allow-the-docker-bridge-network-through-the-firewall).
+- The server was rebuilt and section 11 was not re-run.
+
+**Diagnostic steps:**
+
+```bash
+# Is the service running at all?
+systemctl status node_exporter
+
+# Does it answer locally? (rules the process in or out before looking at the firewall)
+curl -s --max-time 5 http://localhost:9100/metrics | head -3
+
+# Can the Prometheus container reach it? A hang here rather than an error means UFW.
+docker exec deploy-prometheus-1 wget -qO- --timeout=5 http://host.docker.internal:9100/metrics | head -3
+
+# Is the firewall rule still present, and does it still match the bridge subnet?
+sudo ufw status numbered | grep 9100
+docker network inspect deploy_default | grep Subnet
+```
+
+**Remediation:**
+
+```bash
+# Service stopped or crashed
+sudo systemctl restart node_exporter
+journalctl -u node_exporter --no-pager -n 50
+
+# Not installed, or the server was rebuilt: work section 11 end to end
+# (install, user, unit, enable, and the UFW rule - all four are required)
+
+# Firewall rule missing or pointing at the wrong subnet
+sudo ufw allow from <bridge-subnet> to any port 9100 proto tcp comment 'node_exporter for prometheus container'
+```
+
+Confirm the fix on the Prometheus targets page (`http://localhost:9090/targets`, through the
+SSH tunnel) rather than by waiting for the alert to resolve.
+
+---
+
 ## ZaasCollectorDroppedData
 
 **Severity:** warning (dropped data) / critical (collector down)
@@ -1639,6 +1740,10 @@ Covers `ZaasBackupFailed`, `ZaasBackupStale` and `ZaasBackupMetricsMissing`.
 broken in production yet - this alert exists so a bad restore is not the first sign.
 
 **Likely causes:**
+- node_exporter is down, so the metrics never reach Prometheus. If **both** backups' metrics
+  are missing at once, check [ZaasNodeExporterDown](#zaasnodeexporterdown) first - two
+  independently scheduled backups rarely fail in the same instant, but one dead exporter
+  takes out both.
 - The backup script failed: PostgreSQL container down, Docker unavailable, disk full.
 - The timer is disabled or was never enabled (`ZaasBackupMetricsMissing`).
 - The unit files were changed in git but never re-copied to `/etc/systemd/system/`.

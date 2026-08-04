@@ -300,6 +300,29 @@ Check the uid before choosing ownership - `docker run --rm --entrypoint sh <imag
 
 ---
 
+### Alertmanager's `.ExternalURL` defaults to the container's hostname, so generated links go nowhere
+
+**Symptom:** A Slack notification whose title links to `http://c2b677bce09d:9093/#/alerts?receiver=slack-critical`. The host part is a container ID, so the link resolves nowhere from any machine. Nothing in the Alertmanager logs mentions it, and `amtool check-config` is happy.
+
+**Gotcha:** With `--web.external-url` unset, Alertmanager derives `.ExternalURL` from `os.Hostname()`. Under Docker that hostname is the container ID, and it changes on every recreate. Any template that uses `.ExternalURL` inherits it, including the built-in Slack defaults:
+
+```
+slack.default.fallback  ->  slack.default.title | slack.default.titlelink
+slack.default.titlelink ->  {{ .ExternalURL }}/#/alerts?receiver={{ .Receiver | urlquery }}
+```
+
+The non-obvious part is where it stays visible after the obvious fix. Setting an explicit `title_link` on each receiver (which `deploy/alertmanager.yaml` does, pointing at the alert's `runbook_url`) replaces the title link but *not* `fallback`, which Slack still builds from the default template and uses for mobile push and notification-centre previews. So the bad URL disappears from the message body while remaining in the notification preview - a place easy to never look at while testing on a desktop.
+
+**Fix:** Set the flag so the default is sane, rather than relying on every receiver remembering to override its links:
+
+```yaml
+- "--web.external-url=${ZAAS_ALERTMANAGER_EXTERNAL_URL:-http://localhost:9093}"
+```
+
+`localhost` is the honest value here: the service is bound to `127.0.0.1` and the documented access path is an SSH tunnel, under which `localhost:9093` is exactly right. Note that this flag affects link generation only - it opens no port and changes no listener. Keep the value path-free unless you test the UI afterwards: a path component also becomes the route prefix Alertmanager serves itself under.
+
+---
+
 ## Go
 
 ### Go nil interface method calls panic at runtime with no compile-time warning
