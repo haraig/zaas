@@ -207,7 +207,6 @@ func TestRedisRateLimiter_AllowN_ZeroRPM(t *testing.T) {
 // TestRedisRateLimiter_EmitsOTelSpan verifies that the Redis client is instrumented
 // with redisotel so that Allow calls produce child spans visible to the OTel pipeline.
 func TestRedisRateLimiter_EmitsOTelSpan(t *testing.T) {
-	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}

@@ -157,7 +157,6 @@ func TestSendVerification_CRLFToAddress_NoExtraHeaders(t *testing.T) {
 }
 
 func TestSendVerification_CreatesOTelSpan(t *testing.T) {
-	t.Parallel()
 	ln, _ := mockSMTPServer(t)
 	defer ln.Close()
 
@@ -204,7 +203,6 @@ func TestSendVerification_CreatesOTelSpan(t *testing.T) {
 }
 
 func TestSendReissue_CreatesOTelSpan(t *testing.T) {
-	t.Parallel()
 	ln, _ := mockSMTPServer(t)
 	defer ln.Close()
 
