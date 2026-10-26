@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/exaring/otelpgx v0.11.1
-	github.com/go-chi/chi/v5 v5.3.1
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/oapi-codegen/oapi-codegen/v2 v2.8.0
