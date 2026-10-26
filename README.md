@@ -108,7 +108,7 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 
 ## Community
 
-- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Code of Conduct](https://github.com/haraig/.github/blob/main/CODE_OF_CONDUCT.md)
 - [Security Policy](SECURITY.md)
 
 ## License
