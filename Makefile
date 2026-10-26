@@ -1,4 +1,4 @@
-GOLANGCI_LINT_VERSION := v2.12.2
+GOLANGCI_LINT_VERSION := v2.15.0
 
 .PHONY: all setup generate dev dev-minimal stop test fmt fmt-fix vet mod-tidy lint build web-build-docker clean distclean \
         web-dev web-build web-lint web-check \

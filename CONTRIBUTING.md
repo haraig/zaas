@@ -4,7 +4,7 @@ Thank you for your interest in contributing!
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold it.
+This project follows the [Contributor Covenant Code of Conduct](https://github.com/haraig/.github/blob/main/CODE_OF_CONDUCT.md), which applies to all repositories in the organization. By participating, you agree to uphold it.
 
 ## Reporting Bugs and Requesting Features
 
@@ -14,7 +14,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 ## Prerequisites
 
-- Go 1.26+
+- Go 1.27+
 - Node.js 22+
 - Docker
 - [lefthook](https://get.lefthook.com)
