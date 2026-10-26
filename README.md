@@ -1,7 +1,7 @@
 # ZaaS - Zufall as a Service
 
 [![CI](https://github.com/haraig/zaas/actions/workflows/ci.yaml/badge.svg)](https://github.com/haraig/zaas/actions/workflows/ci.yaml)
-[![Go version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev)
+[![Go version](https://img.shields.io/badge/go-1.27-00ADD8?logo=go)](https://go.dev)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 **Randomness as a Service.** A free, open REST API for random data - dice rolls, coin flips, UUIDs, colors, coordinates, and more.
@@ -85,7 +85,7 @@ Key variables:
 
 ## Tech Stack
 
-- **API**: Go 1.26, [chi](https://github.com/go-chi/chi), [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen), OpenTelemetry
+- **API**: Go 1.27, [chi](https://github.com/go-chi/chi), [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen), OpenTelemetry
 - **Web**: [Astro](https://astro.build), Tailwind CSS v4, [Scalar](https://scalar.com) API playground
 - **Observability**: OTel Collector, Prometheus, Tempo, Loki, Grafana
 - **Deployment**: Docker, Caddy, Hetzner Cloud

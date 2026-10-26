@@ -6,7 +6,7 @@
 
 **Tech stack:**
 
-- API: Go 1.26+, chi router, oapi-codegen, OpenTelemetry
+- API: Go 1.27+, chi router, oapi-codegen, OpenTelemetry
 - Web: Astro, Tailwind CSS v4, Scalar API playground
 - Deployment: Docker, Caddy, Hetzner Cloud
 - CI/CD: GitHub Actions, Conventional Commits, git-cliff

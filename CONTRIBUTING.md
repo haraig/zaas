@@ -14,7 +14,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 ## Prerequisites
 
-- Go 1.26+
+- Go 1.27+
 - Node.js 22+
 - Docker
 - [lefthook](https://get.lefthook.com)
