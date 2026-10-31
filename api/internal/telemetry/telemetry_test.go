@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"go.opentelemetry.io/otel"
-	otellogglobal "go.opentelemetry.io/otel/log/global"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"zaas/api/internal/telemetry"
 )
@@ -28,7 +27,7 @@ func TestInit_NoOpWhenDisabled(t *testing.T) {
 	if otel.GetMeterProvider() == nil {
 		t.Error("MeterProvider should not be nil")
 	}
-	if otellogglobal.GetLoggerProvider() == nil {
+	if otel.GetLoggerProvider() == nil {
 		t.Error("LoggerProvider should not be nil")
 	}
 }

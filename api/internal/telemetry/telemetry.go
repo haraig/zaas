@@ -19,7 +19,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
-	otellogglobal "go.opentelemetry.io/otel/log/global"
 	lognoop "go.opentelemetry.io/otel/log/noop"
 	"go.opentelemetry.io/otel/metric/noop"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
@@ -66,7 +65,7 @@ func Init(ctx context.Context, p Params) (Result, error) {
 	if !p.Enabled {
 		otel.SetTracerProvider(tracenoop.NewTracerProvider())
 		otel.SetMeterProvider(noop.NewMeterProvider())
-		otellogglobal.SetLoggerProvider(lognoop.NewLoggerProvider())
+		otel.SetLoggerProvider(lognoop.NewLoggerProvider())
 		return Result{Shutdown: func(context.Context) error { return nil }}, nil
 	}
 
@@ -116,7 +115,7 @@ func Init(ctx context.Context, p Params) (Result, error) {
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(logExp)),
 		sdklog.WithResource(res),
 	)
-	otellogglobal.SetLoggerProvider(lp)
+	otel.SetLoggerProvider(lp)
 
 	return Result{
 		Shutdown:          shutdownProviders(tp, mp, lp),
