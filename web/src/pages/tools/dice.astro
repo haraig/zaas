@@ -57,7 +57,8 @@ import RateLimitNotice from "../../components/RateLimitNotice.astro";
   <!-- Error -->
   <div
     id="dice-error"
-    role="alert" class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
+    role="alert"
+    class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
   >
   </div>
 
@@ -92,7 +93,7 @@ import RateLimitNotice from "../../components/RateLimitNotice.astro";
     renderResults(json) {
       const data = json as { result?: number; results?: number[] };
       const count = parseInt(countInput.value, 10) || 1;
-      const values = count === 1 ? [data.result] : data.results ?? [];
+      const values = count === 1 ? [data.result] : (data.results ?? []);
       resultEl.textContent = values.join(", ");
     },
   });

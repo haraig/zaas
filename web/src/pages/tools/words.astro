@@ -13,7 +13,9 @@ import RateLimitNotice from "../../components/RateLimitNotice.astro";
   description="Generate random words - general vocabulary, Docker-style adjective_name, or Ubuntu-style Adjective Animal."
 >
   <!-- Controls -->
-  <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-center flex-wrap mb-8">
+  <div
+    class="flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-center flex-wrap mb-8"
+  >
     <div>
       <label for="words-style" class="block text-sm font-medium mb-1">Style</label>
       <select
@@ -85,7 +87,8 @@ import RateLimitNotice from "../../components/RateLimitNotice.astro";
   <!-- Error -->
   <div
     id="words-error"
-    role="alert" class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
+    role="alert"
+    class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
   >
   </div>
 

@@ -12,7 +12,9 @@ import RateLimitNotice from "../../components/RateLimitNotice.astro";
   description="Generate ed25519 or RSA SSH keypairs ready to use."
 >
   <!-- Controls -->
-  <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-center mb-8 flex-wrap">
+  <div
+    class="flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-center mb-8 flex-wrap"
+  >
     <div>
       <label for="sshkey-type" class="block text-sm font-medium mb-1">Type</label>
       <select
@@ -68,7 +70,8 @@ import RateLimitNotice from "../../components/RateLimitNotice.astro";
   <!-- Error -->
   <div
     id="sshkey-error"
-    role="alert" class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
+    role="alert"
+    class="hidden rounded-lg border border-error/30 dark:border-error-dark/30 bg-error/5 dark:bg-error-dark/5 p-4 text-sm text-error dark:text-error-dark"
   >
   </div>
 
