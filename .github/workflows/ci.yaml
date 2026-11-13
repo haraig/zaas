@@ -118,3 +118,4 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+          version: v0.76.2
