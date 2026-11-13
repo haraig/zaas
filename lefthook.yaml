@@ -17,6 +17,16 @@ pre-commit:
     vet:
       glob: "api/**/*.go"
       run: cd api && go vet ./...
+    prettier:
+      # Same config and ignore file as `make fmt-web` and CI; runs from web/
+      # so prettier-plugin-astro resolves. --ignore-unknown skips Go etc.
+      run: |
+        for f in {staged_files}; do set -- "$@" "../$f"; done
+        cd web || exit 1
+        if ! npx prettier --check --ignore-unknown --ignore-path ../.prettierignore "$@"; then
+          echo "ERROR: unformatted files - run: make fmt-web-fix"
+          exit 1
+        fi
     docs-links:
       glob: "{docs/**/*.md,*.md,deploy/prometheus.rules.yaml}"
       run: ./scripts/check-doc-links.py

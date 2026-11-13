@@ -157,6 +157,7 @@ lefthook runs these checks automatically:
 | ----- | ------ | ---------- |
 | `commit-msg` | commitlint (Conventional Commits format) | Fix the commit message format; see `CONTRIBUTING.md` for accepted types |
 | `pre-commit` | `gofmt`, `go vet` | Run `make fmt-fix` then `make vet` |
+| `pre-commit` | Prettier on staged files (same config and `.prettierignore` as CI; Markdown, `deploy/` and email templates are excluded) | Run `make fmt-web-fix` |
 | `pre-commit` | doc link check (only when docs or `prometheus.rules.yaml` change) | Run `make docs-check` - the failure output suggests the correct anchor |
 | `pre-push` | `golangci-lint`, `go test ./...` | Run `make lint` then `make test` |
 
