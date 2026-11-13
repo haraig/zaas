@@ -26,3 +26,11 @@ package-lock.json
 # Misc
 .env
 .env.*
+
+# Hand-formatted on purpose; not subject to Prettier enforcement
+# - Markdown: hand-wrapped prose, anchors checked by `make docs-check`
+# - deploy/: production config, changes need explicit review
+# - Email templates: whitespace can affect rendering in mail clients
+*.md
+deploy/
+api/internal/email/templates/
