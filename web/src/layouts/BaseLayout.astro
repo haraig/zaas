@@ -58,20 +58,26 @@ const ogImageAbsolute = ogImage.startsWith("http") ? ogImage : new URL(ogImage, 
   <body
     class="min-h-screen flex flex-col bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark transition-colors duration-200"
   >
-    {!noHeaderFooter && (
-      <a
-        href="#main-content"
-        class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-white focus:font-medium"
-      >Skip to main content</a>
-    )}
+    {
+      !noHeaderFooter && (
+        <a
+          href="#main-content"
+          class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-white focus:font-medium"
+        >
+          Skip to main content
+        </a>
+      )
+    }
     {!noHeaderFooter && <Header />}
-    {noHeaderFooter ? (
-      <slot />
-    ) : (
-      <main id="main-content" tabindex="-1" class="flex-1">
+    {
+      noHeaderFooter ? (
         <slot />
-      </main>
-    )}
+      ) : (
+        <main id="main-content" tabindex="-1" class="flex-1">
+          <slot />
+        </main>
+      )
+    }
     {!noHeaderFooter && <Footer />}
   </body>
 </html>

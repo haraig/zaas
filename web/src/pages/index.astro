@@ -27,21 +27,24 @@ const features = [
   },
   {
     title: "Random Words",
-    description: "General vocabulary, Docker-style adjective_name, or Ubuntu-style Adjective Animal.",
+    description:
+      "General vocabulary, Docker-style adjective_name, or Ubuntu-style Adjective Animal.",
     endpoint: "/api/v1/words",
     icon: "📝",
     toolHref: "/tools/words",
   },
   {
     title: "Lorem Ipsum",
-    description: "Placeholder text by sentence or paragraph. First result always starts with the classic opener.",
+    description:
+      "Placeholder text by sentence or paragraph. First result always starts with the classic opener.",
     endpoint: "/api/v1/lorem",
     icon: "📄",
     toolHref: "/tools/lorem",
   },
   {
     title: "SSH Key Generator",
-    description: "Generate ed25519 or RSA SSH keypairs with public key, private key, and fingerprint.",
+    description:
+      "Generate ed25519 or RSA SSH keypairs with public key, private key, and fingerprint.",
     endpoint: "/api/v1/ssh-key",
     icon: "🔑",
     toolHref: "/tools/ssh-key",
@@ -108,8 +111,12 @@ const features = [
   <section class="py-16 sm:py-24">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
       <h2 class="text-2xl sm:text-3xl font-bold text-center mb-4">What can you randomize?</h2>
-      <p class="text-center text-text-secondary dark:text-text-secondary-dark mb-12 max-w-xl mx-auto">
-        A few of our favorite endpoints. <a href="/docs" class="text-accent hover:underline">See the full API</a> for everything.
+      <p
+        class="text-center text-text-secondary dark:text-text-secondary-dark mb-12 max-w-xl mx-auto"
+      >
+        A few of our favorite endpoints. <a href="/docs" class="text-accent hover:underline"
+          >See the full API</a
+        > for everything.
       </p>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {
@@ -138,7 +145,10 @@ const features = [
         <a href="/tools" class="text-sm font-medium text-accent hover:underline">
           Try our interactive tools &rarr;
         </a>
-        <a href="/docs" class="text-sm font-medium text-text-secondary dark:text-text-secondary-dark hover:underline">
+        <a
+          href="/docs"
+          class="text-sm font-medium text-text-secondary dark:text-text-secondary-dark hover:underline"
+        >
           View all API endpoints &rarr;
         </a>
       </div>

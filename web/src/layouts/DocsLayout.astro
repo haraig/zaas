@@ -15,8 +15,12 @@ const { title, description } = Astro.props;
 ---
 
 <BaseLayout {title} {description} noHeaderFooter>
-  <header class="fixed top-0 left-0 right-0 h-12 z-50 bg-accent flex items-center px-4 gap-3 font-sans">
-    <a href="/" class="text-indigo-200 hover:text-white text-sm font-medium no-underline transition-colors"
+  <header
+    class="fixed top-0 left-0 right-0 h-12 z-50 bg-accent flex items-center px-4 gap-3 font-sans"
+  >
+    <a
+      href="/"
+      class="text-indigo-200 hover:text-white text-sm font-medium no-underline transition-colors"
       >&larr; ZaaS Home</a
     >
     <span class="text-indigo-400 text-base">/</span>

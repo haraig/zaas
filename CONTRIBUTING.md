@@ -35,7 +35,7 @@ make setup   # installs golangci-lint, npm deps, and lefthook git hooks
 - **Language:** American English throughout all code, comments, and documentation.
 - **Punctuation:** Plain ASCII only - no Unicode arrows, em dashes, curly quotes, middle dots, or similar. See the style section in [AGENTS.md](AGENTS.md) for the full list.
 - **Go formatting:** Enforced by `gofmt` (run `make fmt-fix` to auto-fix).
-- **Web formatting:** Enforced by Prettier (run `make fmt-web-fix` to auto-fix).
+- **Web formatting:** Enforced by Prettier in the pre-commit hook and CI (run `make fmt-web-fix` to auto-fix). Markdown, `deploy/` and the email templates are excluded via `.prettierignore`.
 
 ## Development
 

@@ -60,6 +60,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefix web
 
+      - name: Check formatting (Prettier)
+        run: make fmt-web
+
       - name: Lint + build Astro
         run: make web-check
 
